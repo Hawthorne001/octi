@@ -12,9 +12,12 @@ import eu.darken.octi.common.debug.logging.log
 import eu.darken.octi.common.debug.logging.logTag
 import eu.darken.octi.common.debug.recording.ui.RecorderActivity
 import eu.darken.octi.common.flow.DynamicStateFlow
-import eu.darken.octi.common.startServiceCompat
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.plus
 import java.io.File
 import javax.inject.Inject
@@ -53,11 +56,7 @@ class RecorderModule @Inject constructor(
                         newRecorder.start(createRecordingFilePath())
                         triggerFile.createNewFile()
 
-                        context.startServiceCompat(Intent(context, RecorderService::class.java))
-
-                        copy(
-                            recorder = newRecorder
-                        )
+                        copy(recorder = newRecorder)
                     } else if (!shouldRecord && isRecording) {
                         val currentLog = recorder!!.path!!
                         recorder.stop()

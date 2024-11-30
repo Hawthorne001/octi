@@ -1,15 +1,15 @@
+import com.android.build.api.dsl.Packaging
 import com.android.build.gradle.LibraryExtension
 import org.gradle.api.Action
 import org.gradle.api.JavaVersion
 import java.io.File
 import java.io.FileInputStream
-import java.time.Instant
-import java.util.*
+import java.util.Properties
 
 object ProjectConfig {
     const val minSdk = 23
-    const val compileSdk = 33
-    const val targetSdk = 33
+    const val compileSdk = 34
+    const val targetSdk = 34
     const val packageName = "eu.darken.octi"
 
     object Version {
@@ -25,19 +25,6 @@ object ProjectConfig {
         val code = major * 10000000 + minor * 100000 + patch * 1000 + build * 10
     }
 }
-
-fun lastCommitHash(): String = Runtime.getRuntime().exec("git rev-parse --short HEAD").let { process ->
-    process.waitFor()
-    val output = process.inputStream.use { input ->
-        input.bufferedReader().use {
-            it.readText()
-        }
-    }
-    process.destroy()
-    output.trim()
-}
-
-fun buildTime(): Instant = Instant.now()
 
 /**
  * Configures the [kotlinOptions][org.jetbrains.kotlin.gradle.dsl.KotlinJvmOptions] extension.
@@ -79,7 +66,7 @@ fun LibraryExtension.setupLibraryDefaults() {
         )
     }
 
-    packagingOptions {
+    fun Packaging.() {
         resources.excludes += "DebugProbesKt.bin"
     }
 }
@@ -89,6 +76,8 @@ fun com.android.build.api.dsl.CommonExtension<
         com.android.build.api.dsl.LibraryBuildType,
         com.android.build.api.dsl.LibraryDefaultConfig,
         com.android.build.api.dsl.LibraryProductFlavor,
+        *,
+        *
         >.setupModuleBuildTypes() {
     buildTypes {
         debug {

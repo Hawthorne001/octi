@@ -8,9 +8,11 @@ import eu.darken.octi.common.coroutine.DispatcherProvider
 import eu.darken.octi.common.debug.logging.Logging.Priority.ERROR
 import eu.darken.octi.common.debug.logging.log
 import eu.darken.octi.common.debug.logging.logTag
+import eu.darken.octi.common.livedata.SingleLiveEvent
 import eu.darken.octi.common.navigation.navArgs
 import eu.darken.octi.common.uix.ViewModel3
 import eu.darken.octi.modules.apps.core.AppsRepo
+import eu.darken.octi.modules.apps.core.getInstallerIntent
 import eu.darken.octi.modules.meta.core.MetaRepo
 import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
@@ -18,14 +20,15 @@ import javax.inject.Inject
 @HiltViewModel
 @SuppressLint("StaticFieldLeak")
 class AppsListVM @Inject constructor(
-    @Suppress("UNUSED_PARAMETER") handle: SavedStateHandle,
+    handle: SavedStateHandle,
     dispatcherProvider: DispatcherProvider,
-    private val metaRepo: MetaRepo,
-    private val appsRepo: AppsRepo,
+    metaRepo: MetaRepo,
+    appsRepo: AppsRepo,
 ) : ViewModel3(dispatcherProvider = dispatcherProvider) {
 
     private val navArgs: AppsListFragmentArgs by handle.navArgs()
 
+    val events = SingleLiveEvent<AppListAction>()
 
     data class State(
         val deviceLabel: String = "",
@@ -46,7 +49,15 @@ class AppsListVM @Inject constructor(
         }
 
         val items = moduleData.data.installedPackages
-            .map { pkg -> DefaultPkgVH.Item(pkg = pkg) }
+            .map { pkg ->
+                DefaultPkgVH.Item(
+                    pkg = pkg,
+                    onClick = {
+                        val (main, fallback) = pkg.getInstallerIntent()
+                        events.postValue(AppListAction.OpenAppOrStore(main, fallback))
+                    }
+                )
+            }
             .sortedByDescending { it.pkg.installedAt }
 
         State(

@@ -2,38 +2,22 @@
     <string name="label_settings">Settings</string>
     <string name="label_help">Help</string>
 
-    <string name="general_share_action">Share</string>
-    <string name="general_done_action">Done</string>
-    <string name="general_copy_action">Copy</string>
-    <string name="general_remove_action">Remove</string>
-    <string name="general_wipe_action">Wipe</string>
-    <string name="general_cancel_action">Cancel</string>
-    <string name="general_thanks_action">Thanks</string>
-    <string name="general_gotit_action">Got it</string>
     <string name="general_create_account_action">Create account</string>
     <string name="general_link_existing_action">Link to existing account</string>
-    <string name="general_na_label">N/A</string>
-    <string name="general_empty_label">Empty</string>
-    <string name="general_dismiss_action">Dismiss</string>
-    <string name="general_maybe_later_action">Maybe later</string>
-    <string name="general_manage_action">Manage</string>
     <string name="general_sync_action">Synchronize</string>
-    <string name="general_error_label">Error</string>
     <string name="general_select_server_label">Select server</string>
-    <string name="general_quota_label">Quota</string>
-    <string name="general_tap_hint_msg">Tap for more options</string>
-    <string name="general_upgrade_action">Upgrade</string>
-    <string name="general_donate_action">Donate</string>
-    <string name="general_check_action">Check</string>
-    <string name="general_internal_not_available_msg">Internet connection unavailable</string>
-    <string name="general_refresh_action">Refresh</string>
-    <string name="general_continue">Continue</string>
 
-    <string name="onboarding_body1">Octi is a tool for people with multiple Android devices.</string>
-    <string name="onboarding_body2">It synchronizes information between the devices so you can see one device from all other devices.</string>
-    <string name="onboarding_body3">You can upgrade to Octi Pro to gain extra features and support development.</string>
+    <string name="onboarding_welcome_subtitle">Your Device Buddy</string>
+    <string name="onboarding_welcome_body1">Octi is a tool for people with multiple Android devices.</string>
+    <string name="onboarding_welcome_body2">It keeps you in the loop with all your devices. Whether it\'s your phone, tablet or any other gadget with Octi installed, you\'ll get key details at a glance.</string>
+    <string name="onboarding_welcome_body3">You can upgrade to Octi Pro to gain extra features and support development.</string>
+    <string name="onboarding_welcome_beta_hint">Just a heads-up, this is a beta version, so thanks for your patience as I keep improving the app!</string>
 
-    <string name="dashboard_click_hint">Some entries can be clicked to view more details.</string>
+    <string name="onboarding_privacy_subtitle">Privacy policy</string>
+    <string name="onboarding_privacy_body1">Octi has no ads and does not sell user data.</string>
+
+    <string name="updatecheck_setting_enabled_label">Update check</string>
+    <string name="updatecheck_setting_enabled_explanation">Allow Octi to check for updates to let you know if a newer version is available.</string>
 
     <string name="debug_debuglog_size_label">Size</string>
     <string name="debug_debuglog_size_compressed_label">Compressed size</string>
@@ -41,8 +25,6 @@
     <string name="debug_debuglog_file_label">Recorded log file</string>
     <string name="debug_debuglog_record_action">Record debug log</string>
 
-    <string name="onboarding_card_title">Welcome to Octi</string>
-    <string name="onboarding_card_message">Octi is a very young app and still being improved. If you experience issues or just have a great idea, please let me know!\n\nConsider upgrading to Octi Pro to support me developing it.</string>
     <string name="onboarding_setupsync_title">Setup synchronization</string>
     <string name="onboarding_setupsync_message">Currently you are only seeing this device. To connect your Octi installations, setup a common synchronization service.</string>
 
@@ -57,31 +39,38 @@
     <string name="changelog_label">Changelog</string>
     <string name="settings_acknowledgements_label">Acknowledgements</string>
     <string name="documentation_label">Documentation</string>
-    <string name="email_developer_label">Email developer</string>
+
+    <string name="ui_theme_mode_setting_label">Theme mode</string>
+    <string name="ui_theme_mode_setting_explanation">The mode used when theming the app (e.g. night or day).</string>
+    <string name="ui_theme_mode_dark_label">Dark</string>
+    <string name="ui_theme_mode_light_label">Light</string>
+    <string name="ui_theme_mode_system_label">System</string>
+
+    <string name="ui_theme_style_setting_label">Theme style</string>
+    <string name="ui_theme_style_setting_explanation">The color style used when theming the app.</string>
+    <string name="ui_theme_style_default_label">Default</string>
+    <string name="ui_theme_style_materialyou_label">Material You</string>
 
     <string name="issue_tracker_label">Issue tracker</string>
     <string name="issue_tracker_description">A public issue tracker for bug reports and feature requests.</string>
+    <string name="discord_label">Discord</string>
+    <string name="discord_description">A place to hang out in and ask questions.</string>
 
-    <string name="support_installid_label">Install ID</string>
-    <string name="support_installid_desc">Automatic error reports are anonymous. Share your install ID if the developer needs to find your error reports.</string>
-    <string name="support_debuglog_label">Debug log</string>
+    <string name="support_debuglog_label">Record debug log</string>
+    <string name="support_debuglog_inprogress_label">Stop debug log</string>
     <string name="support_debuglog_desc">Record everything the app is doing into a text file that you can share.</string>
     <string name="settings_support_label">Support</string>
     <string name="debug_debuglog_sensitive_information_message">This file contains sensitive information (e.g. your installed applications). Only share it with trusted parties.</string>
     <string name="settings_debuglog_explanation">This feature records everything the app is doing into a shareable file. The generated file contains sensitive information (e.g. your installed applications). Only share it with trusted parties (e.g. the app developer if you are troubleshooting an issue together).</string>
 
-    <string name="sync_last_update_label">Last update</string>
-    <string name="sync_last_sync_label">Last sync</string>
+    <string name="sync_last_action_label">Last action</string>
     <string name="sync_last_never_label">Never</string>
     <string name="sync_quota_storage_msg">%s free (%s / %s)</string>
 
-    <string name="battery_status_card_label">Battery status</string>
-
-    <string name="device_uptime_x">Uptime: %s</string>
     <string name="general_disconnect_action">Disconnect</string>
     <string name="generic_info_action">Info</string>
+    <string name="general_reset_action">Reset</string>
 
-    <string name="sync_server_label">Server</string>
     <string name="sync_account_label">Account</string>
     <string name="sync_services_label">Sync services</string>
 
@@ -89,6 +78,7 @@
     <string name="sync_add_help_desc">A synchronization service is required for information exchange between Octi installs.\n\nDevices can only see each other if they have a common sync service!</string>
 
     <string name="sync_synced_devices_label">Synced devices</string>
+    <string name="sync_connector_paused_label">Pause synchronization</string>
 
     <plurals name="general_devices_count_label">
         <item quantity="one">%d device</item>
@@ -99,6 +89,9 @@
         <item quantity="other">%d unique, only available here</item>
     </plurals>
 
+    <string name="updates_dashcard_title">Update available</string>
+    <string name="updates_dashcard_body">An update is available. You have %1$s and the latest version is %2$s.</string>
+
     <string name="sync_settings_label">Synchronization</string>
     <string name="sync_settings_desc">Device name, timing and trigger conditions.</string>
     <string name="sync_setting_devicelabel_label">Device label</string>
@@ -108,47 +101,9 @@
     <string name="sync_setting_interval_desc">Background synchronization interval (in minutes).</string>
     <string name="sync_setting_category_background_label">Background synchronization</string>
 
-    <string name="sync_gdrive_type_label">Google Drive</string>
-    <string name="sync_gdrive_appdata_label">App-data scope</string>
-    <string name="sync_gdrive_type_appdata_description">Data is placed in Google Drive. This specific variant uses the "app-data" scope. Access is only granted to a new folder just for this app. The folder is not visible in your drive. It is similar to how WhatsApp backups work.</string>
-    <string name="sync_gdrive_add_label">Add new Google Drive</string>
-    <string name="sync_gdrive_add_description">Click the sign-in button below to setup Google Drive access.</string>
-    <string name="sync_gdrive_wipe_confirmation_desc">Reset all Octi data stored on Google Drive. Your device stays logged into Google Drive.</string>
-    <string name="sync_gdrive_disconnect_confirmation_desc">Log out from Google Drive and delete data from this device.</string>
-    <string name="sync_gdrive_error_no_account_on_device">This device is not signed into any Google account.</string>
+    <string name="sync_custom_server_label">Custom server</string>
 
-    <string name="sync_jserver_type_label">J-Server</string>
-    <string name="sync_jserver_type_description">A open-source sync server for Octi made by a friend. Data is encrypted client-side, only your devices can decrypt it.\n\nAs both the app and the server are still being improved, it may be less stable than other sync options.</string>
-    <string name="sync_jserver_add_create_action_hint">Inactive accounts are deleted after a few weeks.</string>
-    <string name="sync_jserver_add_subtitle">Add new Google Drive</string>
-    <string name="sync_jserver_add_link_action_hint">You will need access to another device that is already linked.</string>
-    <string name="sync_jserver_about_title">About JServer</string>
-    <string name="sync_jserver_about_desc">JServer is an open-source sync server for Octi by Jakob Möller.</string>
-    <string name="sync_jserver_about_author_action">Author</string>
-    <string name="sync_jserver_about_source_action">Source code</string>
-    <string name="sync_jserver_wipe_confirmation_desc">Reset this account and delete all stored data. Your device stays linked to the account.</string>
-    <string name="sync_jserver_disconnect_confirmation_desc">This will remove this device from your account. If this is the last linked device, your account will be deleted.</string>
-    <string name="sync_jserver_link_device_action">Link new device</string>
-    <string name="sync_jserver_link_code_label">Link code</string>
-    <string name="sync_jserver_link_host_option_direct">Create a text code that you can send through other apps</string>
-    <string name="sync_jserver_link_host_option_qrcode">Show a QRCode</string>
-    <string name="sync_jserver_link_host_option_nfc">Link device via NFC</string>
-    <string name="sync_jserver_link_host_device_linked_message">A new device was linked to your account.</string>
-    <string name="sync_jserver_link_host_nfc_action">Looking for NFC client. Hold this device close to the device you want link to your account.</string>
-    <string name="sync_jserver_link_client_option_direct">Manually copy and paste a  link code</string>
-    <string name="sync_jserver_link_client_option_qrcode">Scan a QR code from another device</string>
-    <string name="sync_jserver_link_client_option_nfc">Use two devices with NFC</string>
-    <string name="sync_jserver_link_client_startcamera_action">Start camera</string>
-    <string name="sync_jserver_link_client_link_action">Link device</string>
-    <string name="sync_jserver_link_client_nfc_action">Looking for NFC host. Hold it close to the device offering to share account access.</string>
-
-    <string name="module_meta_android_name_x_label">Android %s</string>
     <string name="settings_category_ui_label">User interface</string>
-
-    <string name="ui_theme_setting_label">Theme</string>
-    <string name="ui_theme_dark_label">Dark</string>
-    <string name="ui_theme_light_label">Light</string>
-    <string name="ui_theme_system_label">System</string>
 
     <string name="permission_required_label">Permission required</string>
     <string name="permission_grant_action">Grant permission</string>
@@ -168,46 +123,17 @@
 
     <string name="modules_settings_label">Modules</string>
     <string name="modules_settings_desc">Toggle different modules and tweak their settings.</string>
+
+    <string name="modules_category_connectivity_label">Connectivity</string>
+    <string name="modules_category_energy_label">Battery</string>
+    <string name="modules_category_apps_label">Apps</string>
+    <string name="modules_category_misc_label">Misc</string>
+    <string name="module_apps_category_label">Apps</string>
     <string name="device_x_label">Device: %s</string>
-
-    <string name="module_power_battery_status_unknown">Unknown status</string>
-    <string name="module_power_battery_status_full">Full</string>
-    <string name="module_power_battery_status_charging">Charging</string>
-    <string name="module_power_battery_status_charging_slow">Charging slowly</string>
-    <string name="module_power_battery_status_charging_fast">Charging fast</string>
-    <string name="module_power_battery_status_discharging">Discharging</string>
-    <string name="module_power_battery_status_discharging_slow">Discharging slowly</string>
-    <string name="module_power_battery_status_discharging_fast">Discharging fast</string>
-    <string name="module_power_battery_full_since_x">Charging finished: %s</string>
-    <string name="module_power_battery_full_in_x">Fully charged: %s</string>
-    <string name="module_power_battery_empty_in_x">Out of juice: %s</string>
-    <string name="module_power_battery_estimation_na">Estimation not available</string>
-
-    <string name="module_wifi_unknown_ssid_label">Unknown SSID</string>
-    <string name="module_wifi_unknown_ip_label">Unknown IP</string>
-    <string name="module_wifi_reception_good_label">Good signal</string>
-    <string name="module_wifi_reception_okay_label">OK signal</string>
-    <string name="module_wifi_reception_bad_label">Bad signal</string>
-
-    <string name="module_power_label">Power module</string>
-    <string name="module_power_desc">Battery, charging, estimates, temperature, etc.</string>
-
-    <string name="module_wifi_label">Wi-Fi module</string>
-    <string name="module_wifi_desc">Names, reception, IPs, etc.</string>
-
-    <string name="module_apps_x_installed">%d apps installed</string>
-    <string name="module_apps_last_installed_x">Last installed app: %s</string>
-    <string name="module_apps_list_title">Installed apps</string>
 
     <string name="pro_device_limit_reached_title">Device limit reached</string>
     <string name="pro_device_limit_reached_description">You currently have %1$d  synced devices. To view more than %2$d devices, upgrade to Octi Pro or remove devices.</string>
-    <string name="module_power_widget_description">Display the battery status of your synced devices.</string>
 
-    <string name="module_apps_label">Apps module</string>
-    <string name="module_apps_desc">Information about installed apps.</string>
-
-    <string name="module_clipboard_label">Clipboard module</string>
-    <string name="module_clipboard_desc">Copy and paste text between devices.</string>
-    <string name="module_clipboard_copied_octi_to_os">Copied Octi to system clipboard</string>
-    <string name="module_clipboard_copied_os_to_octi">Copied system to Octi clipboard</string>
+    <string name="sync_delete_device_keepaccess_caveat">Removing this device will delete its data but won\'t revoke access. To revoke access, disconnect Octi on the device.</string>
+    <string name="sync_delete_device_revokeaccess_caveat">Deleting this device will remove its data and revoke its access.</string>
 </resources>

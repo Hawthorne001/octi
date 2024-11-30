@@ -3,9 +3,11 @@
 <img src="https://github.com/d4rken-org/octi/raw/main/fastlane/metadata/android/en-US/images/featureGraphic.jpg" width="400">
 
 [![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/d4rken-org/octi?include_prereleases)](https://github.com/d4rken-org/octi/releases/latest)
-[![Github All Releases](https://img.shields.io/github/downloads/d4rken-org/octi/total.svg)]()
-[![Code tests & eval](https://github.com/d4rken-org/octi/actions/workflows/code-checks.yml/badge.svg)](https://github.com/d4rken-org/octi/actions/workflows/code-checks.yml)
 [![API](https://img.shields.io/badge/API-23%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=23)
+[![Code tests & eval](https://github.com/d4rken-org/octi/actions/workflows/code-checks.yml/badge.svg)](https://github.com/d4rken-org/octi/actions/workflows/code-checks.yml)
+[![Github Downloads](https://img.shields.io/github/downloads/d4rken-org/octi/total.svg?label=GitHub%20Downloads&logo=github)](https://github.com/d4rken-org/octi/main/README.md#download)
+[![Google Play Downloads](https://img.shields.io/endpoint?color=green&logo=google-play&logoColor=green&url=https%3A%2F%2Fplay.cuzi.workers.dev%2Fplay%3Fi%3Deu.darken.octi%26l%3DGoogle%2520Play%26m%3D%24totalinstalls)](https://github.com/d4rken-org/octi/main/README.md#download)
+[![⭐](https://img.shields.io/endpoint?url=https%3A%2F%2Fplay.cuzi.workers.dev%2Fplay%3Fi%3Deu.darken.octi%26gl%3DUS%26hl%3Den%26l%3D%25E2%25AD%2590%26m%3D%24rating)](https://github.com/d4rken-org/octi/main/README.md#download)
 
 All your Android devices, closer together than ever.
 
@@ -22,8 +24,7 @@ Information modules:
 Synchronization options:
 
 * Google Drive: Easy to use if all devices use the same account.
-* J-Server: End-To-End encrypted server if you don't want to use Google Drive.
-* ...
+* [K-Server](https://github.com/d4rken/octi-sync-server-kotlin): End-To-End encrypted server that doesn't require a Google account.
 
 Hungry for details? [Check the wiki](https://github.com/d4rken-org/octi/wiki). Still have
 questions? [Join us on discord](https://discord.gg/s7V4C6zuVy)!
@@ -54,7 +55,7 @@ If you like the app, consider:
 
 ## Thanks
 
-* Huge thanks to [@jakmoe](https://github.com/jakmoe) for writing Octi's open source sync
+* Huge thanks to [@jakmoe](https://github.com/jakmoe) for writing Octi's first open source sync
   server [J-Server](https://github.com/jakob-moeller-cloud/octi-sync-server)
 
 ## Screenshots

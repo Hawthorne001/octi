@@ -7,6 +7,8 @@ plugins {
 apply(plugin = "dagger.hilt.android.plugin")
 apply(plugin = "androidx.navigation.safeargs.kotlin")
 
+val commitHashProvider = providers.of(CommitHashValueSource::class) {}
+
 android {
     val packageName = ProjectConfig.packageName
 
@@ -26,8 +28,7 @@ android {
         testInstrumentationRunner = "eu.darken.octi.HiltTestRunner"
 
         buildConfigField("String", "PACKAGENAME", "\"${ProjectConfig.packageName}\"")
-        buildConfigField("String", "GITSHA", "\"${lastCommitHash()}\"")
-        buildConfigField("String", "BUILDTIME", "\"${buildTime()}\"")
+        buildConfigField("String", "GITSHA", "\"${commitHashProvider.get()}\"")
         buildConfigField("String", "VERSION_CODE", "\"${ProjectConfig.Version.code}\"")
         buildConfigField("String", "VERSION_NAME", "\"${ProjectConfig.Version.name}\"")
     }
@@ -91,10 +92,10 @@ android {
         val variantOutputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
         val variantName: String = variantOutputImpl.name
 
-        if (listOf("release", "beta").any { variantName.toLowerCase().contains(it) }) {
+        if (listOf("release", "beta").any { variantName.lowercase().contains(it) }) {
             val outputFileName = packageName +
                     "-v${defaultConfig.versionName}-${defaultConfig.versionCode}" +
-                    "-${variantName.toUpperCase()}-${lastCommitHash()}.apk"
+                    "-${variantName.uppercase()}.apk"
 
             variantOutputImpl.outputFileName = outputFileName
         }
@@ -116,6 +117,11 @@ android {
             useJUnitPlatform()
         }
     }
+    packaging {
+        resources {
+            excludes += "META-INF/INDEX.LIST"
+        }
+    }
 }
 
 dependencies {
@@ -124,8 +130,8 @@ dependencies {
     implementation(project(":app-common"))
     testImplementation(project(":app-common-test"))
     implementation(project(":sync-core"))
-    implementation(project(":syncs-jserver"))
     implementation(project(":syncs-gdrive"))
+    implementation(project(":syncs-kserver"))
     implementation(project(":module-core"))
     implementation(project(":modules-meta"))
     implementation(project(":modules-power"))
@@ -148,20 +154,23 @@ dependencies {
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("io.coil-kt:coil:2.0.0-rc02")
 
-    implementation("com.google.android.gms:play-services-auth:20.3.0")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
     implementation("com.google.api-client:google-api-client-android:+") {
         exclude("org.apache.httpcomponents")
     }
 
-    implementation("androidx.navigation:navigation-fragment-ktx:2.5.0")
-    implementation("androidx.navigation:navigation-ui-ktx:2.5.0")
-    androidTestImplementation("androidx.navigation:navigation-testing:2.5.0")
+    implementation("androidx.navigation:navigation-fragment-ktx:2.7.7")
+    implementation("androidx.navigation:navigation-ui-ktx:2.7.7")
+    androidTestImplementation("androidx.navigation:navigation-testing:2.7.7")
 
     implementation("androidx.core:core-splashscreen:1.0.0")
 
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    "gplayImplementation"("com.android.billingclient:billing:4.0.0")
+    "gplayImplementation"("com.android.billingclient:billing:7.0.0")
+    "gplayImplementation"("com.android.billingclient:billing-ktx:7.0.0")
 
     implementation("io.coil-kt:coil:2.0.0-rc02")
+
+    implementation("io.github.z4kn4fein:semver:1.4.2")
 }

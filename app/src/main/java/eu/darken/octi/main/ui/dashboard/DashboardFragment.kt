@@ -1,5 +1,6 @@
 package eu.darken.octi.main.ui.dashboard
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -18,6 +19,7 @@ import eu.darken.octi.R
 import eu.darken.octi.common.BuildConfigWrap
 import eu.darken.octi.common.colorString
 import eu.darken.octi.common.debug.logging.log
+import eu.darken.octi.common.error.asErrorDialogBuilder
 import eu.darken.octi.common.getQuantityString2
 import eu.darken.octi.common.lists.differ.update
 import eu.darken.octi.common.lists.setupDefaults
@@ -65,14 +67,17 @@ class DashboardFragment : Fragment3(R.layout.dashboard_fragment) {
                         vm.goToSyncServices()
                         true
                     }
+
                     R.id.action_upgrade -> {
-                        vm.upgradeToOctiPro()
+                        DashboardFragmentDirections.goToUpgradeFragment().navigate()
                         true
                     }
+
                     R.id.action_settings -> {
                         doNavigate(DashboardFragmentDirections.actionDashFragmentToSettingsContainerFragment())
                         true
                     }
+
                     else -> super.onOptionsItemSelected(it)
                 }
             }
@@ -89,9 +94,7 @@ class DashboardFragment : Fragment3(R.layout.dashboard_fragment) {
             val baseTitle = when {
                 state.isPro -> getString(R.string.app_name_upgraded)
                 else -> getString(R.string.app_name)
-            }.split(" ".toRegex())
-                .dropLastWhile { it.isEmpty() }
-                .toTypedArray()
+            }.split(" ".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
 
             toolbar.title = if (baseTitle.size == 2) {
                 val builder = SpannableStringBuilder(baseTitle[0] + " ")
@@ -107,21 +110,28 @@ class DashboardFragment : Fragment3(R.layout.dashboard_fragment) {
                     when (event.permission) {
                         Permission.IGNORE_BATTERY_OPTIMIZATION -> {
                             awaitingPermission = true
-                            startActivity(
-                                Intent(
-                                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                    Uri.parse("package:${requireContext().packageName}")
+                            try {
+                                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                            } catch (e: ActivityNotFoundException) {
+                                startActivity(
+                                    Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.parse("package:${requireContext().packageName}")
+                                    )
                                 )
-                            )
+                            }
                         }
+
                         else -> permissionLauncher.launch(event.permission.permissionId)
                     }
                 }
+
                 is DashboardEvent.ShowPermissionDismissHint -> {
                     Snackbar
                         .make(view, R.string.permission_dismiss_hint, Snackbar.LENGTH_SHORT)
                         .show()
                 }
+
                 is DashboardEvent.ShowPermissionPopup -> {
                     val binding = DashboardPermissionItemBinding.inflate(layoutInflater)
                     val dialog = MaterialAlertDialogBuilder(requireContext()).setView(binding.root).create()
@@ -138,7 +148,17 @@ class DashboardFragment : Fragment3(R.layout.dashboard_fragment) {
                     )
                     dialog.show()
                 }
-                is DashboardEvent.LaunchUpgradeFlow -> vm.launchUpgradeFlow(requireActivity())
+                is DashboardEvent.OpenAppOrStore -> {
+                    try {
+                        startActivity(event.intent)
+                    } catch (e: Exception) {
+                        try {
+                            startActivity(event.fallback)
+                        } catch (e: Exception) {
+                            e.asErrorDialogBuilder(requireActivity()).show()
+                        }
+                    }
+                }
             }
         }
 

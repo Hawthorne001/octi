@@ -15,14 +15,18 @@ import eu.darken.octi.common.debug.autoreport.DebugSettings
 import eu.darken.octi.common.debug.logging.log
 import eu.darken.octi.common.debug.logging.logTag
 import eu.darken.octi.common.permissions.Permission
+import eu.darken.octi.common.theming.ThemeMode
+import eu.darken.octi.common.theming.ThemeStyle
+import eu.darken.octi.main.core.updater.UpdateChecker
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class GeneralSettings @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val moshi: Moshi,
-    private val debugSettings: DebugSettings,
+    moshi: Moshi,
+    debugSettings: DebugSettings,
+    updateChecker: UpdateChecker,
 ) : PreferenceScreenData {
 
     private val Context.dataStore by preferencesDataStore(name = "core_settings")
@@ -32,11 +36,12 @@ class GeneralSettings @Inject constructor(
 
     val isOnboardingDone = dataStore.createValue("onboarding.finished", false)
 
-    val isWelcomeDismissed = dataStore.createValue("onboarding.welcome.dismissed", false)
+    val isUpdateCheckEnabled = dataStore.createValue("updater.check.enabled", updateChecker.isEnabledByDefault())
 
     val isSyncSetupDismissed = dataStore.createValue("onboarding.syncsetup.dismissed", false)
 
-    val themeType = dataStore.createValue("core.ui.theme.type", ThemeType.SYSTEM.identifier)
+    val themeMode = dataStore.createValue("core.ui.theme.mode", ThemeMode.SYSTEM, moshi)
+    val themeStyle = dataStore.createValue("core.ui.theme.style", ThemeStyle.DEFAULT, moshi)
 
     val dismissedPermissions: DataStoreValue<Set<Permission>> = dataStore.createValue(
         stringPreferencesKey("core.permission.dismissed"),
@@ -57,7 +62,9 @@ class GeneralSettings @Inject constructor(
 
     override val mapper = PreferenceStoreMapper(
         debugSettings.isAutoReportingEnabled,
-        themeType
+        themeMode,
+        themeStyle,
+        isUpdateCheckEnabled,
     )
 
     companion object {

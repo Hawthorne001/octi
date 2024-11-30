@@ -1,13 +1,9 @@
 package eu.darken.octi.main.ui.dashboard
 
 import android.annotation.SuppressLint
-import android.app.Activity
-import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import eu.darken.octi.common.BuildConfigWrap
 import eu.darken.octi.common.WebpageTool
 import eu.darken.octi.common.coroutine.AppScope
 import eu.darken.octi.common.coroutine.DispatcherProvider
@@ -23,27 +19,42 @@ import eu.darken.octi.common.permissions.Permission
 import eu.darken.octi.common.uix.ViewModel3
 import eu.darken.octi.common.upgrade.UpgradeRepo
 import eu.darken.octi.main.core.GeneralSettings
+import eu.darken.octi.main.core.updater.UpdateService
 import eu.darken.octi.main.ui.dashboard.items.DeviceLimitVH
 import eu.darken.octi.main.ui.dashboard.items.PermissionVH
 import eu.darken.octi.main.ui.dashboard.items.SyncSetupVH
-import eu.darken.octi.main.ui.dashboard.items.WelcomeVH
+import eu.darken.octi.main.ui.dashboard.items.UpdateCardVH
+import eu.darken.octi.main.ui.dashboard.items.UpgradeCardVH
 import eu.darken.octi.main.ui.dashboard.items.perdevice.DeviceVH
 import eu.darken.octi.module.core.ModuleData
 import eu.darken.octi.module.core.ModuleManager
 import eu.darken.octi.modules.apps.core.AppsInfo
+import eu.darken.octi.modules.apps.core.getInstallerIntent
 import eu.darken.octi.modules.apps.ui.dashboard.DeviceAppsVH
 import eu.darken.octi.modules.clipboard.ClipboardHandler
 import eu.darken.octi.modules.clipboard.ClipboardInfo
 import eu.darken.octi.modules.clipboard.ClipboardVH
 import eu.darken.octi.modules.meta.core.MetaInfo
 import eu.darken.octi.modules.power.core.PowerInfo
+import eu.darken.octi.modules.power.core.alert.BatteryLowAlertRule
+import eu.darken.octi.modules.power.core.alert.PowerAlert
+import eu.darken.octi.modules.power.core.alert.PowerAlertManager
 import eu.darken.octi.modules.power.ui.dashboard.DevicePowerVH
 import eu.darken.octi.modules.wifi.core.WifiInfo
 import eu.darken.octi.modules.wifi.ui.dashboard.DeviceWifiVH
 import eu.darken.octi.sync.core.SyncManager
 import eu.darken.octi.sync.core.SyncSettings
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
@@ -54,22 +65,23 @@ import javax.inject.Inject
 class DashboardVM @Inject constructor(
     @Suppress("UNUSED_PARAMETER") handle: SavedStateHandle,
     dispatcherProvider: DispatcherProvider,
-    @ApplicationContext private val context: Context,
     @AppScope private val appScope: CoroutineScope,
     private val generalSettings: GeneralSettings,
     private val syncManager: SyncManager,
     private val moduleManager: ModuleManager,
-    private val networkStateProvider: NetworkStateProvider,
+    networkStateProvider: NetworkStateProvider,
     private val permissionTool: PermissionTool,
     private val syncSettings: SyncSettings,
-    private val upgradeRepo: UpgradeRepo,
+    upgradeRepo: UpgradeRepo,
     private val webpageTool: WebpageTool,
     private val clipboardHandler: ClipboardHandler,
+    private val updateService: UpdateService,
+    private val alertManager: PowerAlertManager,
 ) : ViewModel3(dispatcherProvider = dispatcherProvider) {
 
     init {
         if (!generalSettings.isOnboardingDone.valueBlocking) {
-            DashboardFragmentDirections.actionDashFragmentToOnboardingFragment().navigate()
+            DashboardFragmentDirections.actionDashFragmentToWelcomeFragment().navigate()
         }
     }
 
@@ -97,21 +109,14 @@ class DashboardVM @Inject constructor(
     val state: LiveData<State> = combine(
         tickerUiRefresh,
         networkStateProvider.networkState,
-        generalSettings.isWelcomeDismissed.flow,
         generalSettings.isSyncSetupDismissed.flow,
         deviceItems(),
         permissionTool.missingPermissions,
         isManuallyRefreshing,
         upgradeRepo.upgradeInfo,
-    ) { now, networkState, isWelcomeDismissed, isSyncSetupDismissed, deviceItems, missingPermissions, isRefreshing, upgradeInfo ->
+        updateService.availableUpdate.onStart { emit(null) },
+    ) { now, networkState, isSyncSetupDismissed, deviceItems, missingPermissions, isRefreshing, upgradeInfo, update ->
         val items = mutableListOf<DashboardAdapter.Item>()
-
-        if (!isWelcomeDismissed && !upgradeInfo.isPro) {
-            WelcomeVH.Item(
-                onDismiss = { launch { generalSettings.isWelcomeDismissed.value(true) } },
-                onUpgrade = { upgradeToOctiPro() }
-            ).run { items.add(this) }
-        }
 
         val connectorCount = syncManager.connectors.first().size
         if (!isSyncSetupDismissed && connectorCount == 0) {
@@ -136,16 +141,40 @@ class DashboardVM @Inject constructor(
                 )
             }.run { items.addAll(this) }
 
+        if (update != null) {
+            UpdateCardVH.Item(
+                update = update,
+                onDismiss = {
+                    launch {
+                        updateService.dismissUpdate(update)
+                        updateService.refresh()
+                    }
+                },
+                onViewUpdate = {
+                    launch { updateService.viewUpdate(update) }
+                },
+                onUpdate = {
+                    launch { updateService.startUpdate(update) }
+                }
+            ).run { items.add(this) }
+        }
+
         if (deviceItems.size > DEVICE_LIMIT && !upgradeInfo.isPro) {
             log(TAG, WARN) { "Exceeding device limit: $deviceItems" }
             DeviceLimitVH.Item(
                 current = deviceItems.size,
                 maximum = DEVICE_LIMIT,
-                onUpgrade = { dashboardEvents.postValue(DashboardEvent.LaunchUpgradeFlow(UpgradeRepo.Type.GPLAY)) },
+                onUpgrade = { DashboardFragmentDirections.goToUpgradeFragment().navigate() },
             ).run { items.add(this) }
             items.addAll(deviceItems.take(DEVICE_LIMIT))
         } else {
             items.addAll(deviceItems)
+        }
+
+        if (!upgradeInfo.isPro) {
+            UpgradeCardVH.Item(
+                onUpgrade = { DashboardFragmentDirections.goToUpgradeFragment().navigate() }
+            ).run { items.add(this) }
         }
 
         val lastConnectorActivity = syncManager.states.first().mapNotNull { it.lastSyncAt }.maxByOrNull { it }
@@ -162,11 +191,6 @@ class DashboardVM @Inject constructor(
     fun goToSyncServices() = launch {
         log(TAG) { "goToSyncServices()" }
         DashboardFragmentDirections.actionDashFragmentToSyncListFragment().navigate()
-    }
-
-    fun upgradeToOctiPro() = launch {
-        log(TAG) { "upgradeToOctiPro()" }
-        dashboardEvents.postValue(DashboardEvent.LaunchUpgradeFlow(UpgradeRepo.Type.GPLAY))
     }
 
     private val refreshLock = Mutex()
@@ -189,31 +213,27 @@ class DashboardVM @Inject constructor(
         if (granted) permissionTool.recheck()
     }
 
-    fun launchUpgradeFlow(activity: Activity) {
-        log(TAG) { "launchUpgradeFlow(activity=$activity)" }
-        upgradeRepo.launchBillingFlow(activity)
-    }
-
     private fun deviceItems(): Flow<List<DeviceVH.Item>> = combine(
         tickerUiRefresh,
         moduleManager.byDevice,
         permissionTool.missingPermissions,
         syncManager.connectors,
-    ) { now, byDevice, missingPermissions, connectors ->
+        alertManager.alerts,
+    ) { now, byDevice, missingPermissions, connectors, alerts ->
         byDevice.devices
             .mapNotNull { (deviceId, moduleDatas) ->
-                val metaModule =
-                    moduleDatas.firstOrNull { it.data is MetaInfo } as? ModuleData<MetaInfo>
+                val metaModule = moduleDatas.firstOrNull { it.data is MetaInfo } as? ModuleData<MetaInfo>
                 if (metaModule == null) {
                     log(TAG, WARN) { "Missing meta module for $deviceId" }
                     return@mapNotNull null
                 }
 
+                val powerAlerts = alerts.filter { it.deviceId == deviceId }
                 val moduleItems = (moduleDatas.toList() - metaModule)
                     .sortedBy { it.orderPrio }
                     .mapNotNull { moduleData ->
                         when (moduleData.data) {
-                            is PowerInfo -> (moduleData as ModuleData<PowerInfo>).createVHItem()
+                            is PowerInfo -> (moduleData as ModuleData<PowerInfo>).createVHItem(powerAlerts)
                             is WifiInfo -> (moduleData as ModuleData<WifiInfo>).createVHItem(missingPermissions)
                             is AppsInfo -> (moduleData as ModuleData<AppsInfo>).createVHItem()
                             is ClipboardInfo -> (moduleData as ModuleData<ClipboardInfo>).createVHItem()
@@ -237,8 +257,18 @@ class DashboardVM @Inject constructor(
     private val ModuleData<out Any>.orderPrio: Int
         get() = INFO_ORDER.indexOfFirst { it.isInstance(this.data) }
 
-    private fun ModuleData<PowerInfo>.createVHItem() = DevicePowerVH.Item(
+
+    private fun ModuleData<PowerInfo>.createVHItem(
+        powerAlertRules: Collection<PowerAlert<*>>
+    ): DevicePowerVH.Item = DevicePowerVH.Item(
         data = this,
+        batteryLowAlert = run {
+            @Suppress("UNCHECKED_CAST")
+            powerAlertRules.firstOrNull { it.rule is BatteryLowAlertRule } as PowerAlert<BatteryLowAlertRule>?
+        },
+        onSettingsAction = {
+            DashboardFragmentDirections.actionDashFragmentToPowerAlertsFragment(deviceId).navigate()
+        }.takeIf { deviceId != syncSettings.deviceId },
     )
 
     private fun ModuleData<WifiInfo>.createVHItem(
@@ -271,9 +301,10 @@ class DashboardVM @Inject constructor(
             DashboardFragmentDirections.actionDashFragmentToAppsListFragment(deviceId).navigate()
         },
         onInstallClicked = {
-            val pkg =
-                data.installedPackages.maxByOrNull { it.installedAt }?.packageName ?: BuildConfigWrap.APPLICATION_ID
-            webpageTool.open("https://play.google.com/store/apps/details?id=$pkg")
+            this.data.installedPackages.maxByOrNull { it.installedAt }?.let {
+                val (main, fallback) = it.getInstallerIntent()
+                dashboardEvents.postValue(DashboardEvent.OpenAppOrStore(main, fallback))
+            }
         }
     )
 

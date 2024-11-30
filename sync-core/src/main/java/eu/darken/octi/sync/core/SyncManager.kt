@@ -2,15 +2,30 @@ package eu.darken.octi.sync.core
 
 import eu.darken.octi.common.coroutine.AppScope
 import eu.darken.octi.common.coroutine.DispatcherProvider
+import eu.darken.octi.common.datastore.value
 import eu.darken.octi.common.debug.logging.Logging.Priority.ERROR
+import eu.darken.octi.common.debug.logging.Logging.Priority.INFO
 import eu.darken.octi.common.debug.logging.asLog
 import eu.darken.octi.common.debug.logging.log
 import eu.darken.octi.common.debug.logging.logTag
 import eu.darken.octi.common.flow.setupCommonEventHandlers
 import eu.darken.octi.common.flow.shareLatest
 import eu.darken.octi.sync.core.cache.SyncCache
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,7 +64,8 @@ class SyncManager @Inject constructor(
         .setupCommonEventHandlers(TAG) { "syncStates" }
         .shareLatest(scope + dispatcherProvider.Default)
 
-    val data: Flow<Collection<SyncRead.Device>> = connectors
+    val data: Flow<Collection<SyncRead.Device>> = syncSettings.pausedConnectors.flow
+        .combine(connectors) { paused, connectorList -> connectorList.filter { !paused.contains(it.identifier) } }
         .flatMapLatest { connectorList ->
             if (connectorList.isEmpty()) {
                 flowOf(emptyList())
@@ -78,11 +94,18 @@ class SyncManager @Inject constructor(
 
     suspend fun sync(options: SyncOptions = SyncOptions()) {
         log(TAG) { "sync(options=$options)" }
-        val syncJobs = connectors.first().map {
-            scope.launch {
-                sync(it.identifier, options = options)
+        val syncJobs = connectors.first()
+            .filter {
+                val paused = syncSettings.pausedConnectors.value().contains(it.identifier)
+                if (paused) log(TAG, INFO) { "Connector is paused: $it" }
+                !paused
             }
-        }
+            .map {
+                scope.launch {
+                    // TODO error handling
+                    sync(it.identifier, options = options)
+                }
+            }
         syncJobs.joinAll()
     }
 
@@ -95,45 +118,68 @@ class SyncManager @Inject constructor(
     suspend fun write(toWrite: SyncWrite.Device.Module) {
         val start = System.currentTimeMillis()
         log(TAG) { "write(data=$toWrite)..." }
-        connectors.first().forEach {
-            it.write(
-                SyncWriteContainer(
-                    deviceId = syncSettings.deviceId,
-                    modules = listOf(
-                        toWrite
+        connectors.first()
+            .filter {
+                val paused = syncSettings.pausedConnectors.value().contains(it.identifier)
+                if (paused) log(TAG, INFO) { "Connector is paused: $it" }
+                !paused
+            }
+            .forEach {
+                it.write(
+                    SyncWriteContainer(
+                        deviceId = syncSettings.deviceId,
+                        modules = listOf(toWrite)
                     )
                 )
-            )
-        }
+            }
 
         log(TAG) { "write(data=$toWrite) done (${System.currentTimeMillis() - start}ms)" }
     }
 
-    suspend fun wipe(identifier: ConnectorId) = withContext(NonCancellable) {
-        log(TAG) { "wipe(identifier=$identifier)" }
-        getConnectorById<SyncConnector>(identifier).first().deleteAll()
-        log(TAG) { "wipe(identifier=$identifier) done" }
+    suspend fun resetData(identifier: ConnectorId) = withContext(NonCancellable) {
+        log(TAG) { "resetData(identifier=$identifier)" }
+        getConnectorById<SyncConnector>(identifier).first().resetData()
+        log(TAG) { "resetData(identifier=$identifier) done" }
     }
 
-    suspend fun disconnect(identifier: ConnectorId, wipe: Boolean = false) = withContext(NonCancellable) {
-        log(TAG) { "disconnect(identifier=$identifier, wipe=$wipe)" }
+    suspend fun disconnect(identifier: ConnectorId) = withContext(NonCancellable) {
+        log(TAG) { "disconnect(identifier=$identifier)" }
 
         val connector = getConnectorById<SyncConnector>(identifier).first()
 
-        disabledConnectors.value = disabledConnectors.value + connector
+        disabledConnectors.value += connector
+
+        if (syncSettings.pausedConnectors.value().contains(identifier)) {
+            log(TAG) { "disconnect(...) was paused, clearing it" }
+            syncSettings.pausedConnectors.update { it - identifier }
+        }
 
         try {
             hubs.first().filter { it.owns(identifier) }.forEach {
                 it.remove(identifier)
             }
-            if (wipe) connector.deleteAll()
         } catch (e: Exception) {
-            log(TAG, ERROR) { "disconnect($identifier,$wipe=$wipe) failed: ${e.asLog()}" }
+            log(TAG, ERROR) { "disconnect(...) failed: ${e.asLog()}" }
+            throw e
         } finally {
-            disabledConnectors.value = disabledConnectors.value - connector
+            disabledConnectors.value -= connector
         }
 
-        log(TAG) { "disconnect(connector=$connector, wipe=$wipe) done" }
+        log(TAG) { "disconnect(connector=$connector) done" }
+    }
+
+    suspend fun togglePause(identifier: ConnectorId, paused: Boolean? = null) {
+        log(TAG, INFO) { "togglePause($identifier, enabled=$paused)" }
+        val pause = paused ?: !syncSettings.pausedConnectors.value().contains(identifier)
+        when (pause) {
+            true -> syncSettings.pausedConnectors.update {
+                it + identifier
+            }
+
+            false -> syncSettings.pausedConnectors.update {
+                it - identifier
+            }
+        }
     }
 
     companion object {
