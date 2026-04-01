@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import eu.darken.octi.R
 import eu.darken.octi.sync.R as SyncR
-import eu.darken.octi.syncs.octiserver.R as OctiServerR
 import eu.darken.octi.common.compose.Preview2
 import eu.darken.octi.common.compose.PreviewWrapper
 import androidx.compose.runtime.collectAsState
@@ -47,7 +46,7 @@ import eu.darken.octi.common.navigation.NavigationEventHandler
 import eu.darken.octi.modules.meta.core.MetaInfo
 import eu.darken.octi.sync.core.ConnectorType
 import eu.darken.octi.sync.core.DeviceId
-import eu.darken.octi.sync.core.StalenessUtil
+import eu.darken.octi.sync.core.IssueSeverity
 import java.time.Instant
 
 @Composable
@@ -98,7 +97,6 @@ fun SyncDevicesScreen(
             items(state.items, key = { it.deviceId.id }) { item ->
                 DeviceRow(
                     item = item,
-                    encryptionType = state.encryptionType,
                     onClick = { selectedDevice = item },
                 )
             }
@@ -121,7 +119,6 @@ fun SyncDevicesScreen(
 @Composable
 private fun DeviceRow(
     item: SyncDevicesVM.DeviceItem,
-    encryptionType: String? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -187,17 +184,6 @@ private fun DeviceRow(
             )
         }
 
-        val isStale = StalenessUtil.isStale(item.lastSeen)
-        if (isStale && item.lastSeen != null) {
-            val stalePeriod = StalenessUtil.formatStalePeriod(context, item.lastSeen)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(SyncR.string.sync_device_stale_warning_text, stalePeriod),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
         item.error?.let { error ->
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -208,12 +194,15 @@ private fun DeviceRow(
             )
         }
 
-        if (item.isEncryptionIncompatible(encryptionType)) {
-            Spacer(modifier = Modifier.height(8.dp))
+        item.issues.forEach { issue ->
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = stringResource(OctiServerR.string.sync_octiserver_device_encryption_incompatible),
+                text = issue.label.get(context),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = when (issue.severity) {
+                    IssueSeverity.ERROR -> MaterialTheme.colorScheme.error
+                    IssueSeverity.WARNING -> MaterialTheme.colorScheme.tertiary
+                },
             )
         }
     }

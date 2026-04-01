@@ -35,7 +35,6 @@ import androidx.compose.material.icons.twotone.CellTower
 import androidx.compose.material.icons.twotone.ChevronRight
 import androidx.compose.material.icons.twotone.Schedule
 import androidx.compose.material.icons.twotone.CloudSync
-import eu.darken.octi.sync.core.ClockAnalyzer
 import androidx.compose.material.icons.twotone.Coffee
 import androidx.compose.material.icons.twotone.ContentPaste
 import androidx.compose.material.icons.twotone.ExpandLess
@@ -129,8 +128,9 @@ import eu.darken.octi.modules.power.core.PowerInfo.Status
 import eu.darken.octi.modules.power.ui.dashboard.PowerDetailSheet
 import eu.darken.octi.modules.wifi.WifiModule
 import eu.darken.octi.modules.wifi.ui.dashboard.WifiDetailSheet
+import eu.darken.octi.sync.core.ConnectorIssue
 import eu.darken.octi.sync.core.DeviceId
-import eu.darken.octi.sync.core.StalenessUtil
+import eu.darken.octi.sync.core.IssueSeverity
 import eu.darken.octi.sync.core.SyncConnector.EventMode
 import eu.darken.octi.sync.core.SyncConnector
 import eu.darken.octi.sync.core.SyncOrchestrator
@@ -314,7 +314,7 @@ fun DashboardScreen(
 
     // Auto-exit edit mode if the edited device vanishes
     LaunchedEffect(state.devices, editingDeviceId) {
-        if (editingDeviceId != null && state.devices.none { it.meta.deviceId.id == editingDeviceId }) {
+        if (editingDeviceId != null && state.devices.none { it.deviceId.id == editingDeviceId }) {
             editingDeviceId = null
         }
     }
@@ -324,7 +324,7 @@ fun DashboardScreen(
     var showWifiDetail by remember { mutableStateOf<DashboardVM.ModuleItem.Wifi?>(null) }
     var showConnectivityDetail by remember { mutableStateOf<DashboardVM.ModuleItem.Connectivity?>(null) }
     var showClipboardDetail by remember { mutableStateOf<DashboardVM.ModuleItem.Clipboard?>(null) }
-    var showClockDiscrepancySheet by remember { mutableStateOf(false) }
+    var showIssuesSheetSeverity by remember { mutableStateOf<IssueSeverity?>(null) }
 
     LaunchedEffect(state.isOffline) {
         if (state.isOffline) {
@@ -401,25 +401,25 @@ fun DashboardScreen(
                 }
             }
 
-            // Action chips row (sync setup + permissions + upgrade + clock discrepancy + compatibility)
-            val hasClockDiscrepancy = state.clockAnalysis != null
-            val hasCompatibilityIssue = state.incompatibleDevices.isNotEmpty()
-            val hasActionChips = state.showSyncSetup || state.missingPermissions.isNotEmpty() || !state.upgradeInfo.isPro || hasClockDiscrepancy || hasCompatibilityIssue
+            // Action chips row (sync setup + permissions + upgrade + issue counts)
+            val errorCount = state.issues.count { it.severity == IssueSeverity.ERROR }
+            val warningCount = state.issues.count { it.severity == IssueSeverity.WARNING }
+            val hasActionChips = state.showSyncSetup || state.missingPermissions.isNotEmpty() || !state.upgradeInfo.isPro || errorCount > 0 || warningCount > 0
             if (hasActionChips) {
                 item(key = "action_chips", span = { GridItemSpan(maxLineSpan) }) {
                     ActionChipsRow(
                         showSyncSetup = state.showSyncSetup,
                         missingPermissions = state.missingPermissions,
                         showUpgrade = !state.upgradeInfo.isPro,
-                        showClockDiscrepancy = hasClockDiscrepancy,
-                        showCompatibilityIssue = hasCompatibilityIssue,
+                        errorCount = errorCount,
+                        warningCount = warningCount,
                         onSetupSync = onSetupSync,
                         onDismissSyncSetup = onDismissSyncSetup,
                         onGrantPermission = onGrantPermission,
                         onDismissPermission = onDismissPermission,
                         onUpgrade = onUpgrade,
-                        onClockDiscrepancy = { showClockDiscrepancySheet = true },
-                        onCompatibilityIssue = onSyncServices,
+                        onErrorsClick = { showIssuesSheetSeverity = IssueSeverity.ERROR },
+                        onWarningsClick = { showIssuesSheetSeverity = IssueSeverity.WARNING },
                     )
                 }
             }
@@ -444,7 +444,7 @@ fun DashboardScreen(
 
             items(
                 items = freeDevices,
-                key = { it.meta.deviceId.id },
+                key = { it.deviceId.id },
             ) { device ->
                 val index = devices.indexOf(device)
                 DeviceCardOrEditor(
@@ -456,7 +456,7 @@ fun DashboardScreen(
                     onEditCard = { editingDeviceId = it },
                     onUpgrade = onUpgrade,
                     onManageStaleDevice = onSyncServices,
-                    onClockDiscrepancy = { showClockDiscrepancySheet = true },
+                    onIssueClick = onSyncServices,
                     onPowerClicked = { showPowerDetail = it },
                     onPowerAlerts = onPowerAlerts,
                     onWifiClicked = { showWifiDetail = it },
@@ -494,7 +494,7 @@ fun DashboardScreen(
 
                 items(
                     items = devices.drop(deviceLimit),
-                    key = { it.meta.deviceId.id },
+                    key = { it.deviceId.id },
                 ) { device ->
                     val index = devices.indexOf(device)
                     DeviceCardOrEditor(
@@ -506,7 +506,7 @@ fun DashboardScreen(
                         onEditCard = { editingDeviceId = it },
                         onUpgrade = onUpgrade,
                         onManageStaleDevice = onSyncServices,
-                        onClockDiscrepancy = { showClockDiscrepancySheet = true },
+                        onIssueClick = onSyncServices,
                         onPowerClicked = { showPowerDetail = it },
                         onPowerAlerts = onPowerAlerts,
                         onWifiClicked = { showWifiDetail = it },
@@ -530,14 +530,6 @@ fun DashboardScreen(
                         onMoveDown = onMoveDeviceDown,
                     )
                 }
-            }
-
-            // Incompatible device cards
-            items(
-                items = state.incompatibleDevices,
-                key = { "incompatible_${it.deviceId.id}" },
-            ) { item ->
-                IncompatibleDeviceCard(item = item)
             }
 
         }
@@ -576,12 +568,22 @@ fun DashboardScreen(
         )
     }
 
-    if (showClockDiscrepancySheet && state.clockAnalysis != null) {
-        ClockDiscrepancySheet(
-            analysis = state.clockAnalysis,
-            deviceNames = state.devices.associate { it.meta.deviceId to it.meta.data.labelOrFallback },
-            onDismiss = { showClockDiscrepancySheet = false },
-        )
+    showIssuesSheetSeverity?.let { severity ->
+        val filteredIssues = state.issues.filter { it.severity == severity }
+        if (filteredIssues.isNotEmpty()) {
+            val connectorLabels = state.syncStatus?.syncDetail?.connectors
+                ?.associate { it.connectorId to it.accountLabel }
+                ?: emptyMap()
+            IssuesSummarySheet(
+                severity = severity,
+                issues = filteredIssues,
+                connectorLabels = connectorLabels,
+                onConnectorClick = { onSyncServices() },
+                onDismiss = { showIssuesSheetSeverity = null },
+            )
+        } else {
+            showIssuesSheetSeverity = null
+        }
     }
 }
 
@@ -1002,15 +1004,15 @@ private fun ActionChipsRow(
     showSyncSetup: Boolean,
     missingPermissions: List<Permission>,
     showUpgrade: Boolean,
-    showClockDiscrepancy: Boolean,
-    showCompatibilityIssue: Boolean = false,
+    errorCount: Int = 0,
+    warningCount: Int = 0,
     onSetupSync: () -> Unit,
     onDismissSyncSetup: () -> Unit,
     onGrantPermission: (Permission) -> Unit,
     onDismissPermission: (Permission) -> Unit,
     onUpgrade: () -> Unit,
-    onClockDiscrepancy: () -> Unit,
-    onCompatibilityIssue: () -> Unit = {},
+    onErrorsClick: () -> Unit = {},
+    onWarningsClick: () -> Unit = {},
 ) {
     FlowRow(
         modifier = Modifier
@@ -1053,22 +1055,22 @@ private fun ActionChipsRow(
                 onLongClick = null,
             )
         }
-        if (showClockDiscrepancy) {
-            ActionChip(
-                icon = Icons.TwoTone.Schedule,
-                label = stringResource(SyncR.string.sync_clock_discrepancy_chip_label),
-                onClick = onClockDiscrepancy,
-                onLongClick = null,
-                tint = MaterialTheme.colorScheme.tertiary,
-            )
-        }
-        if (showCompatibilityIssue) {
+        if (errorCount > 0) {
             ActionChip(
                 icon = Icons.TwoTone.Warning,
-                label = stringResource(R.string.sync_device_compatibility_hint),
-                onClick = onCompatibilityIssue,
+                label = pluralStringResource(R.plurals.sync_issues_errors_count, errorCount, errorCount),
+                onClick = onErrorsClick,
                 onLongClick = null,
                 tint = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (warningCount > 0) {
+            ActionChip(
+                icon = Icons.TwoTone.Warning,
+                label = pluralStringResource(R.plurals.sync_issues_warnings_count, warningCount, warningCount),
+                onClick = onWarningsClick,
+                onLongClick = null,
+                tint = MaterialTheme.colorScheme.tertiary,
             )
         }
     }
@@ -1104,49 +1106,6 @@ private fun ActionChip(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
-            )
-        }
-    }
-}
-
-@Composable
-private fun IncompatibleDeviceCard(item: DashboardVM.IncompatibleDeviceItem) {
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.TwoTone.Warning,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.error,
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.label ?: item.deviceId.id.take(8),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    val details = listOfNotNull(item.version, item.platform).joinToString(" · ")
-                    if (details.isNotEmpty()) {
-                        Text(
-                            text = details,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(OctiServerR.string.sync_octiserver_device_encryption_incompatible),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer,
             )
         }
     }
@@ -1395,7 +1354,7 @@ private fun DashboardDeviceCard(
     onEditCard: (String) -> Unit,
     onUpgrade: () -> Unit,
     onManageStaleDevice: () -> Unit,
-    onClockDiscrepancy: () -> Unit,
+    onIssueClick: () -> Unit,
     onPowerClicked: (DashboardVM.ModuleItem.Power) -> Unit,
     onPowerAlerts: (DeviceId) -> Unit,
     onWifiClicked: (DashboardVM.ModuleItem.Wifi) -> Unit,
@@ -1409,12 +1368,11 @@ private fun DashboardDeviceCard(
     onCopyClipboard: (ClipboardInfo) -> Unit,
     showMessage: (String) -> Unit,
 ) {
-    val meta = device.meta.data
-    val isStale = device.isStale
-    val isClockSkewed = device.isClockSkewed
+    val meta = device.meta?.data
+    val isDegraded = device.isDegraded
     val hasModules = device.moduleItems.isNotEmpty()
-    val canEdit = hasModules && !device.isLimited
-    val shouldShowModules = !device.isLimited && hasModules && !device.isCollapsed
+    val canEdit = hasModules && !device.isLimited && !isDegraded
+    val shouldShowModules = !device.isLimited && hasModules && !device.isCollapsed && !isDegraded
 
     val chevronRotation by animateFloatAsState(
         targetValue = if (device.isCollapsed) 0f else 90f,
@@ -1428,6 +1386,11 @@ private fun DashboardDeviceCard(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .animateContentSize(),
+        colors = if (isDegraded) {
+            CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        } else {
+            CardDefaults.elevatedCardColors()
+        },
     ) {
         // Header
         Row(
@@ -1441,13 +1404,14 @@ private fun DashboardDeviceCard(
                     .combinedClickable(
                         onClick = {
                             when {
-                                canEdit -> onToggleCollapse(device.meta.deviceId.id)
+                                isDegraded -> onIssueClick()
+                                canEdit -> onToggleCollapse(device.deviceId.id)
                                 device.isLimited -> onUpgrade()
                             }
                         },
                         onLongClick = {
                             if (canEdit) {
-                                onEditCard(device.meta.deviceId.id)
+                                onEditCard(device.deviceId.id)
                             }
                         },
                     )
@@ -1457,44 +1421,54 @@ private fun DashboardDeviceCard(
                 Icon(
                     imageVector = when {
                         device.isCurrentDevice -> Icons.TwoTone.Home
-                        else -> when (meta.deviceType) {
+                        isDegraded -> Icons.TwoTone.Warning
+                        else -> when (meta?.deviceType) {
                             MetaInfo.DeviceType.PHONE -> Icons.TwoTone.PhoneAndroid
                             MetaInfo.DeviceType.TABLET -> Icons.TwoTone.Tablet
-                            MetaInfo.DeviceType.UNKNOWN -> Icons.TwoTone.QuestionMark
+                            else -> Icons.TwoTone.QuestionMark
                         }
                     },
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
+                    tint = if (isDegraded) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = meta.deviceLabel?.let { "$it (${meta.deviceName})" } ?: meta.deviceName,
+                        text = device.displayLabel,
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (isStale || isClockSkewed) {
-                            Icon(
-                                imageVector = Icons.TwoTone.Warning,
-                                contentDescription = null,
-                                tint = if (isStale) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.size(14.dp),
+                    if (!isDegraded && device.meta != null) {
+                        val primaryInfo = device.infos.firstOrNull()
+                        val badgeColor = primaryInfo?.severityColor()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (badgeColor != null) {
+                                Icon(
+                                    imageVector = Icons.TwoTone.Warning,
+                                    contentDescription = null,
+                                    tint = badgeColor,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            Text(
+                                text = DateUtils.getRelativeTimeSpanString(
+                                    device.meta.modifiedAt.clampToNow().toEpochMilli()
+                                ).toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = badgeColor ?: Color.Unspecified,
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
                         }
-                        Text(
-                            text = DateUtils.getRelativeTimeSpanString(
-                                device.meta.modifiedAt.clampToNow().toEpochMilli()
-                            ).toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = when {
-                                isStale -> MaterialTheme.colorScheme.error
-                                isClockSkewed -> MaterialTheme.colorScheme.tertiary
-                                else -> Color.Unspecified
-                            },
-                        )
+                    } else if (isDegraded) {
+                        val details = listOfNotNull(device.degradedVersion, device.degradedPlatform).joinToString(" · ")
+                        if (details.isNotEmpty()) {
+                            Text(
+                                text = details,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                 }
                 if (canEdit) {
@@ -1531,7 +1505,7 @@ private fun DashboardDeviceCard(
                             text = { Text(stringResource(R.string.dashboard_device_edit_card_action)) },
                             onClick = {
                                 showMenu = false
-                                onEditCard(device.meta.deviceId.id)
+                                onEditCard(device.deviceId.id)
                             },
                         )
                     }
@@ -1539,29 +1513,26 @@ private fun DashboardDeviceCard(
             }
         }
 
-        // Module tiles
-        if (shouldShowModules) {
-            // Stale warning
-            if (isStale) {
+        // Info rows (shown for both normal expanded and degraded devices)
+        if (shouldShowModules || isDegraded) {
+            device.infos.forEach { issue ->
                 HorizontalDivider()
-                StaleDeviceWarning(
-                    lastSyncTime = device.meta.modifiedAt,
-                    onManageDevice = onManageStaleDevice,
+                IssueInfoRow(
+                    issue = issue,
+                    onClick = onIssueClick,
                 )
             }
-            // Clock skew warning
-            if (isClockSkewed && !isStale) {
-                HorizontalDivider()
-                ClockSkewWarning(onDetails = onClockDiscrepancy)
-            }
+        }
 
+        // Module tiles
+        if (shouldShowModules) {
             val availableModuleIds = buildAvailableModuleIds(device.moduleItems)
             val rows = device.tileLayout.toRows(availableModuleIds)
 
             ModuleTileGrid(
                 rows = rows,
                 moduleItems = device.moduleItems,
-                deviceId = device.meta.deviceId,
+                deviceId = device.deviceId,
                 onPowerClicked = onPowerClicked,
                 onPowerAlerts = onPowerAlerts,
                 onWifiClicked = onWifiClicked,
@@ -1589,7 +1560,7 @@ private fun DeviceCardOrEditor(
     onEditCard: (String) -> Unit,
     onUpgrade: () -> Unit,
     onManageStaleDevice: () -> Unit,
-    onClockDiscrepancy: () -> Unit,
+    onIssueClick: () -> Unit,
     onPowerClicked: (DashboardVM.ModuleItem.Power) -> Unit,
     onPowerAlerts: (DeviceId) -> Unit,
     onWifiClicked: (DashboardVM.ModuleItem.Wifi) -> Unit,
@@ -1609,10 +1580,10 @@ private fun DeviceCardOrEditor(
     onMoveUp: (String) -> Unit,
     onMoveDown: (String) -> Unit,
 ) {
-    val deviceId = device.meta.deviceId.id
+    val deviceId = device.deviceId.id
     if (editingDeviceId == deviceId) {
         TileEditorCard(
-            deviceName = device.meta.data.deviceLabel ?: device.meta.data.deviceName,
+            deviceName = device.displayLabel,
             initialConfig = device.tileLayout,
             onDone = { config -> onDoneEditing(deviceId, config) },
             onCancel = onCancelEditing,
@@ -1630,7 +1601,7 @@ private fun DeviceCardOrEditor(
             onEditCard = onEditCard,
             onUpgrade = onUpgrade,
             onManageStaleDevice = onManageStaleDevice,
-            onClockDiscrepancy = onClockDiscrepancy,
+            onIssueClick = onIssueClick,
             onPowerClicked = onPowerClicked,
             onPowerAlerts = onPowerAlerts,
             onWifiClicked = onWifiClicked,
@@ -1660,63 +1631,37 @@ private fun buildAvailableModuleIds(moduleItems: List<DashboardVM.ModuleItem>): 
 }
 
 @Composable
-private fun StaleDeviceWarning(
-    lastSyncTime: Instant,
-    onManageDevice: () -> Unit,
-) {
-    val context = LocalContext.current
-    val stalePeriod = StalenessUtil.formatStalePeriod(context, lastSyncTime)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.TwoTone.Warning,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = stringResource(SyncR.string.sync_device_stale_warning_text, stalePeriod),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(onClick = onManageDevice) {
-            Text(stringResource(CommonR.string.general_manage_action))
-        }
-    }
+private fun ConnectorIssue.severityColor(): Color = when (severity) {
+    IssueSeverity.ERROR -> MaterialTheme.colorScheme.error
+    IssueSeverity.WARNING -> MaterialTheme.colorScheme.tertiary
 }
 
 @Composable
-private fun ClockSkewWarning(
-    onDetails: () -> Unit,
+private fun IssueInfoRow(
+    issue: ConnectorIssue,
+    onClick: () -> Unit,
 ) {
+    val tint = issue.severityColor()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.TwoTone.Warning,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.tertiary,
+            tint = tint,
             modifier = Modifier.size(20.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = stringResource(SyncR.string.sync_device_clock_skew_warning_text),
+            text = issue.label.get(LocalContext.current),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.tertiary,
+            color = tint,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = onDetails) {
-            Text(stringResource(CommonR.string.general_show_details_action))
-        }
     }
 }
 
@@ -1800,6 +1745,7 @@ private fun DashboardScreenPreview() = PreviewWrapper {
             devices = listOf(
                 DashboardVM.DeviceItem(
                     now = now,
+                    deviceId = deviceId,
                     meta = ModuleData(
                         modifiedAt = now.minusSeconds(300),
                         deviceId = deviceId,
@@ -1903,6 +1849,7 @@ private fun DashboardScreenMultiDevicePreview() = PreviewWrapper {
         isCollapsed: Boolean,
     ) = DashboardVM.DeviceItem(
         now = now,
+        deviceId = deviceId,
         meta = ModuleData(
             modifiedAt = now.minusSeconds(300),
             deviceId = deviceId,

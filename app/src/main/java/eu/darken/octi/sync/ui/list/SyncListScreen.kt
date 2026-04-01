@@ -6,6 +6,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import eu.darken.octi.R
 import eu.darken.octi.common.R as CommonR
-import eu.darken.octi.sync.R as SyncR
+
 import eu.darken.octi.syncs.gdrive.R as GDriveR
 import eu.darken.octi.syncs.octiserver.R as OctiServerR
 import eu.darken.octi.common.compose.Preview2
@@ -55,8 +56,11 @@ import androidx.compose.runtime.collectAsState
 import eu.darken.octi.common.error.ErrorEventHandler
 import eu.darken.octi.common.navigation.NavigationEventHandler
 import eu.darken.octi.sync.core.ConnectorId
+import eu.darken.octi.sync.core.ConnectorIssue
 import eu.darken.octi.sync.core.ConnectorType
+import eu.darken.octi.sync.core.IssueSeverity
 import eu.darken.octi.sync.core.DeviceId
+import eu.darken.octi.sync.core.DeviceMetadata
 import eu.darken.octi.sync.core.SyncConnectorState
 import eu.darken.octi.sync.core.encryption.PayloadEncryption
 import eu.darken.octi.syncs.octiserver.core.OctiServer
@@ -285,7 +289,7 @@ private fun GDriveConnectorCard(
 
             DevicesField(state = item.ourState, otherStates = item.otherStates)
 
-            StaleDevicesWarning(count = item.staleDevicesCount)
+            ConnectorIssuesRow(issues = item.issues)
         }
     }
 }
@@ -364,7 +368,7 @@ private fun OctiServerConnectorCard(
 
             DevicesField(state = item.ourState, otherStates = item.otherStates)
 
-            StaleDevicesWarning(count = item.staleDevicesCount)
+            ConnectorIssuesRow(issues = item.issues)
         }
     }
 }
@@ -424,10 +428,11 @@ private fun DevicesField(state: SyncConnectorState, otherStates: Collection<Sync
         text = stringResource(R.string.sync_synced_devices_label),
         style = MaterialTheme.typography.labelMedium,
     )
-    val devicesText = state.devices?.let { ourDevices ->
+    val ourDevices = state.deviceMetadata.map { it.deviceId }.toSet()
+    val devicesText = ourDevices.takeIf { it.isNotEmpty() }?.let {
         var deviceString = pluralStringResource(R.plurals.general_devices_count_label, ourDevices.size, ourDevices.size)
 
-        val devicesFromConnectors = otherStates.mapNotNull { it.devices }.flatten().toSet()
+        val devicesFromConnectors = otherStates.flatMap { it.deviceMetadata.map { m -> m.deviceId } }.toSet()
         val uniqueDevices = ourDevices - devicesFromConnectors
         if (uniqueDevices.isNotEmpty()) {
             val uniquesString = pluralStringResource(
@@ -444,13 +449,29 @@ private fun DevicesField(state: SyncConnectorState, otherStates: Collection<Sync
 }
 
 @Composable
-private fun StaleDevicesWarning(count: Int) {
-    if (count > 0) {
-        Text(
-            text = pluralStringResource(SyncR.plurals.sync_stale_devices_info_message, count, count),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
+private fun ConnectorIssuesRow(issues: List<ConnectorIssue>) {
+    val errorCount = issues.count { it.severity == IssueSeverity.ERROR }
+    val warningCount = issues.count { it.severity == IssueSeverity.WARNING }
+    if (errorCount == 0 && warningCount == 0) return
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(top = 4.dp),
+    ) {
+        if (errorCount > 0) {
+            Text(
+                text = pluralStringResource(R.plurals.sync_issues_errors_count, errorCount, errorCount),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (warningCount > 0) {
+            Text(
+                text = pluralStringResource(R.plurals.sync_issues_warnings_count, warningCount, warningCount),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
     }
 }
 
@@ -474,11 +495,14 @@ private fun SyncListScreenPreview() = PreviewWrapper {
                     ourState = OctiServerConnector.State(
                         activeActions = 0,
                         lastActionAt = Instant.now().minusSeconds(300),
-                        devices = setOf(DeviceId("device-1"), DeviceId("device-2")),
+                        deviceMetadata = listOf(
+                            DeviceMetadata(deviceId = DeviceId("device-1")),
+                            DeviceMetadata(deviceId = DeviceId("device-2")),
+                        ),
                     ),
                     otherStates = emptyList(),
                     isPaused = false,
-                    staleDevicesCount = 0,
+                    issues = emptyList(),
                 ),
             ),
         ),

@@ -35,6 +35,7 @@ import eu.darken.octi.common.compose.PreviewWrapper
 import eu.darken.octi.sync.core.ConnectorId
 import eu.darken.octi.sync.core.ConnectorType
 import eu.darken.octi.sync.core.DeviceId
+import eu.darken.octi.sync.core.DeviceMetadata
 import eu.darken.octi.sync.core.encryption.PayloadEncryption
 import eu.darken.octi.syncs.octiserver.core.OctiServer
 import eu.darken.octi.syncs.octiserver.core.OctiServerConnector
@@ -201,11 +202,14 @@ private fun OctiServerActionsSheetPreview() = PreviewWrapper {
             ourState = OctiServerConnector.State(
                 activeActions = 0,
                 lastActionAt = Instant.now().minusSeconds(300),
-                devices = setOf(DeviceId("device-1"), DeviceId("device-2")),
+                deviceMetadata = listOf(
+                    DeviceMetadata(deviceId = DeviceId("device-1")),
+                    DeviceMetadata(deviceId = DeviceId("device-2")),
+                ),
             ),
             otherStates = emptyList(),
             isPaused = false,
-            staleDevicesCount = 0,
+            issues = emptyList(),
         ),
         onDismiss = {},
         onTogglePause = {},

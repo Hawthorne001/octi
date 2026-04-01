@@ -26,7 +26,9 @@ interface SyncConnectorState {
     val lastSyncAt: Instant?
         get() = lastActionAt
 
-    val devices: Collection<DeviceId>?
+    val deviceMetadata: List<DeviceMetadata> get() = emptyList()
+
+    val issues: List<ConnectorIssue> get() = emptyList()
 
     val isAvailable: Boolean
 

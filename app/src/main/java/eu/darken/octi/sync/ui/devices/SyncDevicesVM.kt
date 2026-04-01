@@ -18,9 +18,8 @@ import eu.darken.octi.sync.core.ConnectorType
 import eu.darken.octi.sync.core.DeviceId
 import eu.darken.octi.sync.core.SyncManager
 import eu.darken.octi.sync.core.SyncOptions
+import eu.darken.octi.sync.core.ConnectorIssue
 import eu.darken.octi.sync.core.SyncSettings
-import eu.darken.octi.sync.core.encryption.EncryptionMode
-import eu.darken.octi.syncs.octiserver.core.OctiServerConnector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
@@ -30,7 +29,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 
@@ -63,27 +61,18 @@ class SyncDevicesVM @Inject constructor(
         val serverVersion: String?,
         val serverAddedAt: Instant?,
         val serverPlatform: String?,
-    ) {
-        val hasNoModuleData: Boolean get() = metaInfo == null && error == null
-
-        fun isEncryptionIncompatible(encryptionType: String?): Boolean {
-            if (!hasNoModuleData) return false
-            if (EncryptionMode.fromTypeString(encryptionType) != EncryptionMode.AES256_GCM_SIV) return false
-            val addedAt = serverAddedAt ?: return false
-            return Duration.between(addedAt, Instant.now()).toMinutes() >= 2
-        }
-    }
+        val issues: List<ConnectorIssue> = emptyList(),
+    )
 
     data class State(
         val items: List<DeviceItem> = emptyList(),
         val connectorType: ConnectorType? = null,
-        val encryptionType: String? = null,
     )
 
     val state = connectorFlow
         .flatMapLatest { connector ->
             connector.state
-                .distinctUntilChangedBy { it.devices to (it as? OctiServerConnector.State)?.linkedDevices }
+                .distinctUntilChangedBy { it.deviceMetadata to it.issues }
                 .flatMapLatest { connState ->
                     connector.data
                         .map { data ->
@@ -94,10 +83,8 @@ class SyncDevicesVM @Inject constructor(
                         .map { metaDatas ->
                             log(TAG) { "Loading devices for $connState" }
 
-                            val linkedDevices = (connState as? OctiServerConnector.State)?.linkedDevices
-
-                            val items = connState.devices?.map { deviceId ->
-                                val linked = linkedDevices?.find { it.deviceId == deviceId }
+                            val items = connState.deviceMetadata.map { deviceMeta ->
+                                val deviceId = deviceMeta.deviceId
                                 var error: Exception? = null
                                 val metaInfo = metaDatas?.find { it.deviceId == deviceId }?.let {
                                     try {
@@ -111,21 +98,18 @@ class SyncDevicesVM @Inject constructor(
                                 DeviceItem(
                                     deviceId = deviceId,
                                     metaInfo = metaInfo,
-                                    lastSeen = linked?.lastSeen,
+                                    lastSeen = deviceMeta.lastSeen,
                                     error = error,
-                                    serverVersion = linked?.version,
-                                    serverAddedAt = linked?.addedAt,
-                                    serverPlatform = linked?.platform,
+                                    serverVersion = deviceMeta.version,
+                                    serverAddedAt = deviceMeta.addedAt,
+                                    serverPlatform = deviceMeta.platform,
+                                    issues = connState.issues.filter { it.deviceId == deviceId },
                                 )
-                            }
-                                ?.sortedBy { it.metaInfo?.labelOrFallback?.lowercase() }
-                                ?: emptyList()
+                            }.sortedBy { it.metaInfo?.labelOrFallback?.lowercase() }
 
                             State(
                                 items = items,
                                 connectorType = connector.identifier.type,
-                                encryptionType = (connector as? OctiServerConnector)
-                                    ?.credentials?.encryptionKeyset?.type,
                             )
                         }
                 }

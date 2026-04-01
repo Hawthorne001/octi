@@ -16,6 +16,31 @@
         <item quantity="other">%d devices haven\'t synced recently</item>
     </plurals>
 
+    <string name="sync_device_outdated_version_warning">Running outdated version %s</string>
+    <string name="sync_issues_type_stale_device">stale device</string>
+    <string name="sync_issues_type_clock_skew">clock issue</string>
+    <string name="sync_issues_type_outdated_version">outdated version</string>
+
+    <plurals name="sync_issues_stale_devices_count">
+        <item quantity="one">%d stale device</item>
+        <item quantity="other">%d stale devices</item>
+    </plurals>
+
+    <plurals name="sync_issues_outdated_versions_count">
+        <item quantity="one">%d outdated version</item>
+        <item quantity="other">%d outdated versions</item>
+    </plurals>
+
+    <plurals name="sync_issues_encryption_errors_count">
+        <item quantity="one">%d encryption error</item>
+        <item quantity="other">%d encryption errors</item>
+    </plurals>
+
+    <plurals name="sync_issues_clock_skew_count">
+        <item quantity="one">%d clock issue</item>
+        <item quantity="other">%d clock issues</item>
+    </plurals>
+
     <plurals name="sync_stale_period_days">
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>
