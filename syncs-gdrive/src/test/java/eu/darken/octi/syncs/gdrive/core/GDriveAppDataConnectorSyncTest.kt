@@ -109,6 +109,7 @@ class GDriveAppDataConnectorSyncTest : BaseTest() {
             networkStateProvider = mockNetworkState,
             supportedModuleIds = setOf(power, wifi),
             syncSettings = syncSettings,
+            json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true },
         )
 
         // Inject mock Drive via reflection, bypassing GDriveBaseConnector's lazy init

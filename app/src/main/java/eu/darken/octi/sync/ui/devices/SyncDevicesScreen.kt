@@ -28,7 +28,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import eu.darken.octi.R
 import eu.darken.octi.sync.R as SyncR
-import eu.darken.octi.syncs.octiserver.R as OctiServerR
 import eu.darken.octi.common.compose.Preview2
 import eu.darken.octi.common.compose.PreviewWrapper
 import androidx.compose.runtime.collectAsState
@@ -47,12 +48,13 @@ import eu.darken.octi.common.navigation.NavigationEventHandler
 import eu.darken.octi.modules.meta.core.MetaInfo
 import eu.darken.octi.sync.core.ConnectorType
 import eu.darken.octi.sync.core.DeviceId
-import eu.darken.octi.sync.core.StalenessUtil
+import eu.darken.octi.sync.core.IssueSeverity
 import java.time.Instant
 
 @Composable
 fun SyncDevicesScreenHost(
     connectorId: String,
+    initialDeviceId: String? = null,
     vm: SyncDevicesVM = hiltViewModel(),
 ) {
     vm.initialize(connectorId)
@@ -64,6 +66,7 @@ fun SyncDevicesScreenHost(
     state?.let {
         SyncDevicesScreen(
             state = it,
+            initialDeviceId = initialDeviceId,
             onNavigateUp = { vm.navUp() },
             onDeleteDevice = { deviceId -> vm.deleteDevice(deviceId) },
         )
@@ -73,10 +76,20 @@ fun SyncDevicesScreenHost(
 @Composable
 fun SyncDevicesScreen(
     state: SyncDevicesVM.State,
+    initialDeviceId: String? = null,
     onNavigateUp: () -> Unit,
     onDeleteDevice: (DeviceId) -> Unit,
 ) {
     var selectedDevice by remember { mutableStateOf<SyncDevicesVM.DeviceItem?>(null) }
+    var initialConsumed by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(initialDeviceId, state.items) {
+        if (!initialConsumed && initialDeviceId != null && state.items.isNotEmpty()) {
+            initialConsumed = true
+            val target = state.items.find { it.deviceId.id == initialDeviceId }
+            if (target != null) selectedDevice = target
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -98,7 +111,6 @@ fun SyncDevicesScreen(
             items(state.items, key = { it.deviceId.id }) { item ->
                 DeviceRow(
                     item = item,
-                    encryptionType = state.encryptionType,
                     onClick = { selectedDevice = item },
                 )
             }
@@ -121,7 +133,6 @@ fun SyncDevicesScreen(
 @Composable
 private fun DeviceRow(
     item: SyncDevicesVM.DeviceItem,
-    encryptionType: String? = null,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -187,33 +198,25 @@ private fun DeviceRow(
             )
         }
 
-        val isStale = StalenessUtil.isStale(item.lastSeen)
-        if (isStale && item.lastSeen != null) {
-            val stalePeriod = StalenessUtil.formatStalePeriod(context, item.lastSeen)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(SyncR.string.sync_device_stale_warning_text, stalePeriod),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
         item.error?.let { error ->
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = error.toString(),
+                text = error.localizedMessage ?: stringResource(eu.darken.octi.common.R.string.general_error_label),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 maxLines = 10,
             )
         }
 
-        if (item.isEncryptionIncompatible(encryptionType)) {
-            Spacer(modifier = Modifier.height(8.dp))
+        item.issues.forEach { issue ->
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = stringResource(OctiServerR.string.sync_octiserver_device_encryption_incompatible),
+                text = issue.label.get(context),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+                color = when (issue.severity) {
+                    IssueSeverity.ERROR -> MaterialTheme.colorScheme.error
+                    IssueSeverity.WARNING -> MaterialTheme.colorScheme.tertiary
+                },
             )
         }
     }

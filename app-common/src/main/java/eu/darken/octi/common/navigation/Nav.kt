@@ -44,7 +44,7 @@ object Nav {
         data object OctiServerLinkClient : Sync
 
         @Serializable
-        data class Devices(val connectorId: String) : Sync
+        data class Devices(val connectorId: String, val deviceId: String? = null) : Sync
     }
 
     sealed interface Settings : NavigationDestination {

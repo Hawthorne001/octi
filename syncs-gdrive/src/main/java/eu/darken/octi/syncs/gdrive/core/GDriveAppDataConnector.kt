@@ -24,6 +24,9 @@ import eu.darken.octi.module.core.ModuleId
 import eu.darken.octi.sync.core.ConnectorId
 import eu.darken.octi.sync.core.ConnectorType
 import eu.darken.octi.sync.core.DeviceId
+import eu.darken.octi.common.BuildConfigWrap
+import eu.darken.octi.sync.core.ConnectorIssue
+import eu.darken.octi.sync.core.DeviceMetadata
 import eu.darken.octi.sync.core.SyncConnector
 import eu.darken.octi.sync.core.SyncConnector.EventMode
 import eu.darken.octi.sync.core.SyncConnectorState
@@ -59,6 +62,9 @@ import kotlinx.coroutines.plus
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import okio.ByteString.Companion.toByteString
 import okio.IOException
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -73,6 +79,7 @@ class GDriveAppDataConnector @AssistedInject constructor(
     private val networkStateProvider: NetworkStateProvider,
     private val supportedModuleIds: Set<@JvmSuppressWildcards ModuleId>,
     private val syncSettings: SyncSettings,
+    private val json: Json,
 ) : GDriveBaseConnector(dispatcherProvider, context, client), SyncConnector {
 
     data class State(
@@ -80,8 +87,9 @@ class GDriveAppDataConnector @AssistedInject constructor(
         override val lastActionAt: Instant? = null,
         override val lastError: Exception? = null,
         override val quota: SyncConnectorState.Quota? = null,
-        override val devices: Collection<DeviceId>? = null,
         override val isAvailable: Boolean = true,
+        override val issues: List<ConnectorIssue> = emptyList(),
+        override val deviceMetadata: List<DeviceMetadata> = emptyList(),
         val isDead: Boolean = false,
     ) : SyncConnectorState
 
@@ -557,9 +565,31 @@ class GDriveAppDataConnector @AssistedInject constructor(
                         val deviceDirs = appDataRoot.child(DEVICE_DATA_DIR_NAME)
                             ?.listFiles()
                             ?.filter { it.isDirectory }
-                            ?.map { DeviceId(id = it.name) }
+                            ?: emptyList()
 
-                        _state.updateBlocking { copy(devices = deviceDirs) }
+                        val metadata = deviceDirs.map { dir ->
+                            val deviceId = DeviceId(id = dir.name)
+                            val info = try {
+                                dir.child(DEVICE_INFO_FILE)?.readData()?.let {
+                                    json.decodeFromString<GDriveDeviceInfo>(it.utf8())
+                                }
+                            } catch (e: Exception) {
+                                log(TAG, WARN) { "sync(): Failed to read $DEVICE_INFO_FILE for ${dir.name}: ${e.message}" }
+                                null
+                            }
+                            val lastSeen = dir.listFiles()
+                                .filter { it.name != DEVICE_INFO_FILE && !it.isDirectory }
+                                .maxOfOrNull { Instant.ofEpochMilli(it.modifiedTime.value) }
+                            DeviceMetadata(
+                                deviceId = deviceId,
+                                version = info?.version,
+                                platform = info?.platform,
+                                label = info?.label,
+                                lastSeen = lastSeen,
+                            )
+                        }
+
+                        _state.updateBlocking { copy(deviceMetadata = metadata) }
                     } catch (e: Exception) {
                         log(TAG, ERROR) { "sync(): Failed to list of known devices: ${e.asLog()}" }
                     }
@@ -646,6 +676,7 @@ class GDriveAppDataConnector @AssistedInject constructor(
                 log(TAG) { "sync(...): Waiting for jobs to finish..." }
                 jobs.awaitAll()
                 log(TAG) { "sync(...): ... jobs finished." }
+
             }
         } finally {
             syncLock.withLock {
@@ -684,6 +715,22 @@ class GDriveAppDataConnector @AssistedInject constructor(
                 log(TAG, VERBOSE) { "writeDrive(): Created module file $it" }
             }
             moduleFile.writeData(module.payload)
+        }
+
+        // Write device info metadata
+        try {
+            val deviceInfo = GDriveDeviceInfo(
+                version = BuildConfigWrap.VERSION_NAME,
+                platform = "android",
+                label = syncSettings.deviceLabel.value(),
+            )
+            val infoPayload = json.encodeToString(deviceInfo).encodeToByteArray().toByteString()
+            val infoFile = deviceDir.child(DEVICE_INFO_FILE) ?: deviceDir.createFile(DEVICE_INFO_FILE).also {
+                log(TAG, VERBOSE) { "writeDrive(): Created device info file $it" }
+            }
+            infoFile.writeData(infoPayload)
+        } catch (e: Exception) {
+            log(TAG, WARN) { "writeDrive(): Failed to write $DEVICE_INFO_FILE: ${e.message}" }
         }
 
         log(TAG, VERBOSE) { "writeDrive(): Done" }
@@ -757,6 +804,7 @@ class GDriveAppDataConnector @AssistedInject constructor(
 
     companion object {
         private const val DEVICE_DATA_DIR_NAME = "devices"
+        private const val DEVICE_INFO_FILE = "_device.json"
         private const val POLL_INTERVAL_MS = 2 * 60 * 1000L // 2 minutes
         private val TAG = logTag("Sync", "GDrive", "Connector")
     }

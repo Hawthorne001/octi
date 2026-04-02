@@ -14,10 +14,11 @@ import eu.darken.octi.common.uix.ViewModel4
 import eu.darken.octi.common.upgrade.UpgradeRepo
 import eu.darken.octi.common.upgrade.isPro
 import eu.darken.octi.sync.core.ConnectorId
+import eu.darken.octi.sync.core.ConnectorIssue
+import eu.darken.octi.sync.core.ConnectorIssueAggregator
 import eu.darken.octi.sync.core.SyncConnectorState
 import eu.darken.octi.sync.core.SyncManager
 import eu.darken.octi.sync.core.SyncSettings
-import eu.darken.octi.sync.core.StalenessUtil.countStaleDevices
 import eu.darken.octi.syncs.gdrive.core.GDriveAppDataConnector
 import eu.darken.octi.syncs.gdrive.core.GoogleAccount
 import eu.darken.octi.syncs.octiserver.core.OctiServer
@@ -44,6 +45,7 @@ class SyncListVM @Inject constructor(
     private val syncManager: SyncManager,
     private val syncSettings: SyncSettings,
     private val upgradeRepo: UpgradeRepo,
+    private val issueAggregator: ConnectorIssueAggregator,
 ) : ViewModel4(dispatcherProvider = dispatcherProvider) {
 
     data class State(
@@ -61,7 +63,7 @@ class SyncListVM @Inject constructor(
             val ourState: SyncConnectorState,
             val otherStates: Collection<SyncConnectorState>,
             val isPaused: Boolean,
-            val staleDevicesCount: Int,
+            val issues: List<ConnectorIssue> = emptyList(),
         ) : ConnectorItem
 
         data class OctiServer(
@@ -70,7 +72,7 @@ class SyncListVM @Inject constructor(
             val ourState: SyncConnectorState,
             val otherStates: Collection<SyncConnectorState>,
             val isPaused: Boolean,
-            val staleDevicesCount: Int,
+            val issues: List<ConnectorIssue> = emptyList(),
         ) : ConnectorItem
     }
 
@@ -110,7 +112,8 @@ class SyncListVM @Inject constructor(
             if (connectors.isEmpty()) return@flatMapLatest flowOf(emptyList())
 
             val withStates = connectors.map { connector ->
-                combineTransform(connector.state, connector.data) { state, data ->
+                combineTransform(connector.state, issueAggregator.issues) { state, allIssues ->
+                    val connectorIssues = allIssues.filter { it.connectorId == connector.identifier }
                     val item = when (connector) {
                         is GDriveAppDataConnector -> ConnectorItem.GDrive(
                             connectorId = connector.identifier,
@@ -118,7 +121,7 @@ class SyncListVM @Inject constructor(
                             ourState = state,
                             otherStates = (connectors - connector).map { it.state.first() },
                             isPaused = paused.contains(connector.identifier),
-                            staleDevicesCount = data.countStaleDevices(),
+                            issues = connectorIssues,
                         )
 
                         is OctiServerConnector -> ConnectorItem.OctiServer(
@@ -127,7 +130,7 @@ class SyncListVM @Inject constructor(
                             ourState = state,
                             otherStates = (connectors - connector).map { it.state.first() },
                             isPaused = paused.contains(connector.identifier),
-                            staleDevicesCount = data.countStaleDevices(),
+                            issues = connectorIssues,
                         )
 
                         else -> {

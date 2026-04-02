@@ -38,16 +38,15 @@ import eu.darken.octi.modules.power.core.alert.PowerAlert
 import eu.darken.octi.modules.power.core.alert.PowerAlertManager
 import eu.darken.octi.modules.wifi.core.WifiInfo
 import eu.darken.octi.sync.core.ConnectorId
+import eu.darken.octi.sync.core.ConnectorIssue
+import eu.darken.octi.sync.core.ConnectorIssueAggregator
 import eu.darken.octi.sync.core.ConnectorType
 import eu.darken.octi.sync.core.DeviceId
+import eu.darken.octi.sync.core.IssueSeverity
 import eu.darken.octi.sync.core.SyncExecutor
 import eu.darken.octi.sync.core.SyncManager
 import eu.darken.octi.sync.core.SyncOrchestrator
-import eu.darken.octi.sync.core.ClockAnalyzer
-import eu.darken.octi.sync.core.StalenessUtil
 import eu.darken.octi.sync.core.SyncSettings
-import eu.darken.octi.sync.core.encryption.EncryptionMode
-import eu.darken.octi.syncs.octiserver.core.OctiServerConnector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -84,7 +83,7 @@ class DashboardVM @Inject constructor(
     private val alertManager: PowerAlertManager,
     private val syncExecutor: SyncExecutor,
     private val syncOrchestrator: SyncOrchestrator,
-    private val clockAnalyzer: ClockAnalyzer,
+    private val issueAggregator: ConnectorIssueAggregator,
 ) : ViewModel4(dispatcherProvider = dispatcherProvider) {
 
     init {
@@ -140,40 +139,21 @@ class DashboardVM @Inject constructor(
             connectors = connectorDetails,
         )
 
-        val totalDevices = activeStates.sumOf { it.devices?.size ?: 0 }
-
-        val allLinkedDevices = activeConnectors.zip(activeStates)
-            .mapNotNull { (connector, state) ->
-                (state as? OctiServerConnector.State)?.let { octiState ->
-                    val encType = (connector as? OctiServerConnector)?.credentials?.encryptionKeyset?.type
-                    octiState.linkedDevices.map { linked ->
-                        IncompatibleDeviceItem(
-                            deviceId = linked.deviceId,
-                            label = linked.label,
-                            version = linked.version,
-                            platform = linked.platform,
-                            lastSeen = linked.lastSeen,
-                            encryptionType = encType,
-                            addedAt = linked.addedAt,
-                        )
-                    }
-                }
-            }
-            .flatten()
+        val totalDevices = activeStates.sumOf { it.deviceMetadata.size }
 
         when {
             isRefreshing || activeStates.any { it.isBusy } || syncingModules.isNotEmpty() -> {
-                SyncStatus.Syncing(connectorTypes, syncingModules, syncDetail, orchestratorState, now, totalDevices, allLinkedDevices)
+                SyncStatus.Syncing(connectorTypes, syncingModules, syncDetail, orchestratorState, now, totalDevices)
             }
 
             activeStates.any { it.lastError != null } -> {
                 val error = activeStates.first { it.lastError != null }.lastError
-                SyncStatus.Error(error?.message, connectorTypes, syncDetail, orchestratorState, now, totalDevices, allLinkedDevices)
+                SyncStatus.Error(error?.message, connectorTypes, syncDetail, orchestratorState, now, totalDevices)
             }
 
             else -> {
                 val lastSync = activeStates.mapNotNull { it.lastSyncAt }.maxByOrNull { it }
-                SyncStatus.Idle(lastSync, connectorTypes, syncDetail, orchestratorState, now, totalDevices, allLinkedDevices)
+                SyncStatus.Idle(lastSync, connectorTypes, syncDetail, orchestratorState, now, totalDevices)
             }
         }
     }.setupCommonEventHandlers(TAG) { "syncStatus" }
@@ -190,31 +170,29 @@ class DashboardVM @Inject constructor(
         val upgradeInfo: UpgradeRepo.Info,
         val deviceLimitReached: Boolean,
         val deviceLimit: Int = DEVICE_LIMIT,
-        val clockAnalysis: ClockAnalyzer.ClockAnalysis? = null,
-        val incompatibleDevices: List<IncompatibleDeviceItem> = emptyList(),
+        val issues: List<ConnectorIssue> = emptyList(),
     )
 
     data class DeviceItem(
         val now: Instant,
-        val meta: ModuleData<MetaInfo>,
+        val deviceId: DeviceId,
+        val meta: ModuleData<MetaInfo>?,
         val moduleItems: List<ModuleItem>,
         val tileLayout: TileLayoutConfig = TileLayoutConfig(),
         val isCollapsed: Boolean,
         val isLimited: Boolean,
         val isCurrentDevice: Boolean,
-        val isStale: Boolean = false,
-        val isClockSkewed: Boolean = false,
-    )
-
-    data class IncompatibleDeviceItem(
-        val deviceId: DeviceId,
-        val label: String?,
-        val version: String?,
-        val platform: String?,
-        val lastSeen: Instant?,
-        val encryptionType: String?,
-        val addedAt: Instant?,
-    )
+        val infos: List<ConnectorIssue> = emptyList(),
+        val isDegraded: Boolean = false,
+        val degradedConnectorId: ConnectorId? = null,
+        val degradedLabel: String? = null,
+        val degradedPlatform: String? = null,
+        val degradedVersion: String? = null,
+        val degradedLastSeen: Instant? = null,
+    ) {
+        val displayLabel: String
+            get() = meta?.data?.labelOrFallback ?: degradedLabel ?: deviceId.id.take(8)
+    }
 
     sealed interface ModuleItem {
         data class Power(
@@ -256,7 +234,6 @@ class DashboardVM @Inject constructor(
         val orchestratorState: SyncOrchestrator.State
         val now: Instant
         val totalDeviceCount: Int
-        val allLinkedDevices: List<IncompatibleDeviceItem>
 
         data class Syncing(
             override val connectorTypes: List<ConnectorType>,
@@ -265,7 +242,6 @@ class DashboardVM @Inject constructor(
             override val orchestratorState: SyncOrchestrator.State,
             override val now: Instant,
             override val totalDeviceCount: Int = 0,
-            override val allLinkedDevices: List<IncompatibleDeviceItem> = emptyList(),
         ) : SyncStatus
 
         data class Idle(
@@ -275,7 +251,6 @@ class DashboardVM @Inject constructor(
             override val orchestratorState: SyncOrchestrator.State,
             override val now: Instant,
             override val totalDeviceCount: Int = 0,
-            override val allLinkedDevices: List<IncompatibleDeviceItem> = emptyList(),
         ) : SyncStatus
 
         data class Error(
@@ -285,7 +260,6 @@ class DashboardVM @Inject constructor(
             override val orchestratorState: SyncOrchestrator.State,
             override val now: Instant,
             override val totalDeviceCount: Int = 0,
-            override val allLinkedDevices: List<IncompatibleDeviceItem> = emptyList(),
         ) : SyncStatus
     }
 
@@ -299,8 +273,8 @@ class DashboardVM @Inject constructor(
         upgradeRepo.upgradeInfo,
         updateService.availableUpdate.onStart { emit(null) },
         generalSettings.dashboardConfig.flow,
-        clockAnalyzer.analysis,
-    ) { now, networkState, isSyncSetupDismissed, deviceItems, missingPermissions, syncStatus, upgradeInfo, update, uiConfig, clockAnalysis ->
+        issueAggregator.issues,
+    ) { now, networkState, isSyncSetupDismissed, deviceItems, missingPermissions, syncStatus, upgradeInfo, update, uiConfig, issues ->
 
         val connectorCount = syncManager.connectors.first().size
         val showSyncSetup = !isSyncSetupDismissed && connectorCount == 0
@@ -310,7 +284,7 @@ class DashboardVM @Inject constructor(
             .take(1)
 
         // Clean config to remove stale device data, then apply custom ordering
-        val currentDeviceIds = deviceItems.map { it.meta.deviceId.id }.toSet()
+        val currentDeviceIds = deviceItems.map { it.deviceId.id }.toSet()
         val cleanedConfig = uiConfig.toCleaned(currentDeviceIds)
 
         // Persist cleaned config if it changed (remove stale data from storage)
@@ -318,12 +292,12 @@ class DashboardVM @Inject constructor(
             launch { generalSettings.dashboardConfig.value(cleanedConfig) }
         }
 
-        val deviceItemsWithOrder = cleanedConfig.applyCustomOrdering(deviceItems.map { it.meta.deviceId.id })
-            .mapNotNull { deviceId -> deviceItems.find { it.meta.deviceId.id == deviceId } }
+        val deviceItemsWithOrder = cleanedConfig.applyCustomOrdering(deviceItems.map { it.deviceId.id })
+            .mapNotNull { deviceId -> deviceItems.find { it.deviceId.id == deviceId } }
             .let { ordered ->
                 // Add any devices not in the ordered list (shouldn't happen, but safety)
                 ordered + deviceItems.filter { device ->
-                    ordered.none { it.meta.deviceId.id == device.meta.deviceId.id }
+                    ordered.none { it.deviceId.id == device.deviceId.id }
                 }
             }
 
@@ -332,28 +306,15 @@ class DashboardVM @Inject constructor(
 
         // Apply device limit status and tile layout dynamically based on position after reordering
         val orderedDeviceItems = deviceItemsWithOrder.mapIndexed { index, item ->
-            val deviceId = item.meta.deviceId.id
-            val effectiveLayout = cleanedConfig.effectiveLayout(deviceId).normalize(allModuleIds)
+            val deviceIdStr = item.deviceId.id
+            val effectiveLayout = cleanedConfig.effectiveLayout(deviceIdStr).normalize(allModuleIds)
             item.copy(
                 tileLayout = effectiveLayout,
-                isCollapsed = cleanedConfig.isCollapsed(deviceId),
-                isStale = StalenessUtil.isStale(item.meta.modifiedAt),
-                isClockSkewed = when {
-                    item.isCurrentDevice -> clockAnalysis?.isCurrentDeviceSuspect == true
-                    else -> clockAnalysis?.suspectDeviceIds?.contains(item.meta.deviceId) == true
-                },
+                isCollapsed = cleanedConfig.isCollapsed(deviceIdStr),
+                infos = buildDeviceInfos(item, issues),
                 isLimited = !upgradeInfo.isPro && index >= DEVICE_LIMIT,
             )
         }
-
-        val visibleDeviceIds = orderedDeviceItems.map { it.meta.deviceId }.toSet()
-        val incompatible = syncStatus?.allLinkedDevices
-            ?.filter { item ->
-                item.deviceId !in visibleDeviceIds
-                        && EncryptionMode.fromTypeString(item.encryptionType) == EncryptionMode.AES256_GCM_SIV
-                        && item.addedAt?.let { Duration.between(it, Instant.now()).toMinutes() >= 2 } == true
-            }
-            ?: emptyList()
 
         State(
             devices = orderedDeviceItems,
@@ -366,8 +327,7 @@ class DashboardVM @Inject constructor(
             update = update,
             upgradeInfo = upgradeInfo,
             deviceLimitReached = orderedDeviceItems.size > DEVICE_LIMIT && !upgradeInfo.isPro,
-            clockAnalysis = clockAnalysis,
-            incompatibleDevices = incompatible,
+            issues = issues,
         )
     }
         .setupCommonEventHandlers(TAG) { "state" }
@@ -376,6 +336,16 @@ class DashboardVM @Inject constructor(
     fun goToSyncServices() = launch {
         log(TAG) { "goToSyncServices()" }
         navTo(Nav.Sync.List)
+    }
+
+    fun goToConnectorDevices(connectorId: ConnectorId) = launch {
+        log(TAG) { "goToConnectorDevices($connectorId)" }
+        navTo(Nav.Sync.Devices(connectorId = connectorId.idString))
+    }
+
+    fun goToDeviceDetails(connectorId: ConnectorId, deviceId: DeviceId) = launch {
+        log(TAG) { "goToDeviceDetails($connectorId, $deviceId)" }
+        navTo(Nav.Sync.Devices(connectorId = connectorId.idString, deviceId = deviceId.id))
     }
 
     fun goToUpgrade() {
@@ -434,7 +404,7 @@ class DashboardVM @Inject constructor(
 
     fun moveDeviceUp(deviceId: String) = launch {
         reorderMutex.withLock {
-            val currentOrder = state.first().devices.map { it.meta.deviceId.id }
+            val currentOrder = state.first().devices.map { it.deviceId.id }
             val idx = currentOrder.indexOf(deviceId)
             if (idx <= 0) return@withLock
             val newOrder = currentOrder.toMutableList().apply { add(idx - 1, removeAt(idx)) }
@@ -445,7 +415,7 @@ class DashboardVM @Inject constructor(
 
     fun moveDeviceDown(deviceId: String) = launch {
         reorderMutex.withLock {
-            val currentOrder = state.first().devices.map { it.meta.deviceId.id }
+            val currentOrder = state.first().devices.map { it.deviceId.id }
             val idx = currentOrder.indexOf(deviceId)
             if (idx < 0 || idx >= currentOrder.lastIndex) return@withLock
             val newOrder = currentOrder.toMutableList().apply { add(idx + 1, removeAt(idx)) }
@@ -524,10 +494,17 @@ class DashboardVM @Inject constructor(
         moduleManager.byDevice,
         permissionTool.missingPermissions,
         syncManager.connectors,
+        syncManager.states,
         alertManager.alerts,
         upgradeRepo.upgradeInfo,
-    ) { now, byDevice, missingPermissions, _, alerts, _ ->
-        byDevice.devices
+        syncSettings.pausedConnectors.flow,
+    ) { now, byDevice, missingPermissions, connectors, allStates, alerts, _, pausedIds ->
+        val statesList = allStates.toList()
+        val activeConnectors = connectors.filter { !pausedIds.contains(it.identifier) }
+        val statesMap = connectors.zip(statesList).associate { (c, s) -> c.identifier to s }
+
+        // Build normal device items from module data
+        val normalItems = byDevice.devices
             .mapNotNull { (deviceId, moduleDatas) ->
                 @Suppress("UNCHECKED_CAST")
                 val metaModule = moduleDatas.firstOrNull { it.data is MetaInfo } as? ModuleData<MetaInfo>
@@ -577,6 +554,7 @@ class DashboardVM @Inject constructor(
 
                 DeviceItem(
                     now = now,
+                    deviceId = deviceId,
                     meta = metaModule,
                     moduleItems = moduleItems,
                     isCollapsed = false, // Will be updated when applying preferences
@@ -584,8 +562,40 @@ class DashboardVM @Inject constructor(
                     isCurrentDevice = metaModule.deviceId == syncSettings.deviceId,
                 )
             }
-            .sortedBy { it.meta.data.deviceLabel ?: it.meta.data.deviceName }
-            .sortedByDescending { it.meta.deviceId == syncSettings.deviceId }
+
+        // Build degraded device items from connector metadata (devices known but no module data)
+        val normalDeviceIds = normalItems.map { it.deviceId }.toSet()
+        val degradedItems = activeConnectors.flatMap { connector ->
+            val connState = statesMap[connector.identifier] ?: return@flatMap emptyList()
+            connState.deviceMetadata
+                .filter { meta ->
+                    meta.deviceId !in normalDeviceIds
+                            && meta.deviceId != syncSettings.deviceId
+                            && meta.addedAt?.let { Duration.between(it, Instant.now()) >= SyncSettings.FIRST_SYNC_GRACE_PERIOD } != false
+                }
+                .map { meta ->
+                    DeviceItem(
+                        now = now,
+                        deviceId = meta.deviceId,
+                        meta = null,
+                        moduleItems = emptyList(),
+                        isCollapsed = false,
+                        isLimited = false,
+                        isCurrentDevice = false,
+                        isDegraded = true,
+                        degradedConnectorId = connector.identifier,
+                        degradedLabel = meta.label,
+                        degradedPlatform = meta.platform,
+                        degradedVersion = meta.version,
+                        degradedLastSeen = meta.lastSeen,
+                    )
+                }
+        }
+
+        (normalItems + degradedItems)
+            .sortedBy { it.displayLabel.lowercase() }
+            .sortedByDescending { it.deviceId == syncSettings.deviceId }
+            .sortedBy { it.isDegraded }
     }
 
     private val ModuleData<out Any>.orderPrio: Int
@@ -606,6 +616,15 @@ class DashboardVM @Inject constructor(
     }
 
     companion object {
+        internal fun buildDeviceInfos(
+            item: DeviceItem,
+            allIssues: List<ConnectorIssue>,
+        ): List<ConnectorIssue> {
+            return allIssues
+                .filter { it.deviceId == item.deviceId }
+                .sortedWith(compareBy({ if (it.severity == IssueSeverity.ERROR) 0 else 1 }, { it::class.simpleName }))
+        }
+
         private val INFO_ORDER = listOf(
             PowerInfo::class,
             ConnectivityInfo::class,

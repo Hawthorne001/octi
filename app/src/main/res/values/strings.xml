@@ -113,6 +113,16 @@
         <item quantity="other">%d devices</item>
     </plurals>
     <string name="sync_device_compatibility_hint">compatibility issue</string>
+    <string name="sync_issues_errors_title">Errors</string>
+    <string name="sync_issues_warnings_title">Warnings</string>
+    <plurals name="sync_issues_errors_count">
+        <item quantity="one">%d error</item>
+        <item quantity="other">%d errors</item>
+    </plurals>
+    <plurals name="sync_issues_warnings_count">
+        <item quantity="one">%d warning</item>
+        <item quantity="other">%d warnings</item>
+    </plurals>
     <string name="sync_device_added_at_label">Added %1$s</string>
     <plurals name="general_unique_devices_count_label">
         <item quantity="one">%d unique, only available here</item>

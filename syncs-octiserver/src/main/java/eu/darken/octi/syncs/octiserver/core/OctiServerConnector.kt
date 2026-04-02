@@ -28,9 +28,12 @@ import eu.darken.octi.sync.core.SyncEvent
 import eu.darken.octi.sync.core.SyncConnector.EventMode
 import eu.darken.octi.sync.core.SyncOptions
 import eu.darken.octi.sync.core.SyncRead
+import eu.darken.octi.sync.core.ConnectorIssue
+import eu.darken.octi.sync.core.DeviceMetadata
 import eu.darken.octi.sync.core.SyncSettings
 import eu.darken.octi.sync.core.SyncWrite
 import eu.darken.octi.sync.core.SyncWriteContainer
+import eu.darken.octi.sync.core.encryption.EncryptionMode
 import eu.darken.octi.sync.core.encryption.PayloadEncryption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -93,10 +96,10 @@ class OctiServerConnector @AssistedInject constructor(
         override val lastActionAt: Instant? = null,
         override val lastError: Exception? = null,
         override val quota: SyncConnectorState.Quota? = null,
-        override val devices: Collection<DeviceId>? = null,
         override val isAvailable: Boolean = true,
         override val clockOffsets: List<SyncConnectorState.ClockOffset> = emptyList(),
-        val linkedDevices: List<OctiServerEndpoint.LinkedDevice> = emptyList(),
+        override val issues: List<ConnectorIssue> = emptyList(),
+        override val deviceMetadata: List<DeviceMetadata> = emptyList(),
     ) : SyncConnectorState
 
     private val _state = DynamicStateFlow(
@@ -217,12 +220,17 @@ class OctiServerConnector @AssistedInject constructor(
                 val linked = runServerAction("read-devicelist") {
                     endpoint.listDevices()
                 }
-                _state.updateBlocking {
-                    copy(
-                        devices = linked.map { it.deviceId },
-                        linkedDevices = linked.toList(),
+                val metadata = linked.map {
+                    DeviceMetadata(
+                        deviceId = it.deviceId,
+                        version = it.version,
+                        platform = it.platform,
+                        label = it.label,
+                        lastSeen = it.lastSeen,
+                        addedAt = it.addedAt,
                     )
                 }
+                _state.updateBlocking { copy(deviceMetadata = metadata) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -269,6 +277,32 @@ class OctiServerConnector @AssistedInject constructor(
                 log(TAG, ERROR) { "Failed to read: ${e.asLog()}" }
             }
         }
+
+        computeEncryptionIssues()
+    }
+
+    private suspend fun computeEncryptionIssues() {
+        val currentState = _state.value()
+        val metadata = currentState.deviceMetadata
+        val data = _data.value
+        val dataDeviceIds = data?.devices?.filter { it.modules.isNotEmpty() }?.map { it.deviceId }?.toSet() ?: emptySet()
+        val encType = credentials.encryptionKeyset.type
+        val isGcmSiv = EncryptionMode.fromTypeString(encType) == EncryptionMode.AES256_GCM_SIV
+
+        val issues = if (!isGcmSiv) emptyList() else metadata.mapNotNull { device ->
+            if (device.deviceId == syncSettings.deviceId) return@mapNotNull null
+            if (device.deviceId in dataDeviceIds) return@mapNotNull null
+            val addedAt = device.addedAt ?: return@mapNotNull null
+            if (Duration.between(addedAt, Instant.now()) < SyncSettings.FIRST_SYNC_GRACE_PERIOD) return@mapNotNull null
+            OctiServerIssue.EncryptionIncompatible(
+                connectorId = identifier,
+                deviceId = device.deviceId,
+                deviceLabel = device.label,
+            )
+        }
+
+        log(TAG) { "computeEncryptionIssues(): ${issues.size} issues" }
+        _state.updateBlocking { copy(issues = issues) }
     }
 
     private suspend fun fetchModule(deviceId: DeviceId, moduleId: ModuleId): OctiServerModuleData? {

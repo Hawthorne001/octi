@@ -66,5 +66,6 @@ class SyncSettings @Inject constructor(
 
     companion object {
         internal val TAG = logTag("Sync", "Settings")
+        val FIRST_SYNC_GRACE_PERIOD: Duration = Duration.ofMinutes(5)
     }
 }

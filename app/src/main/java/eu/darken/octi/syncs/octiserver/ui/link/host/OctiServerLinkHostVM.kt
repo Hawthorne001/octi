@@ -96,7 +96,7 @@ class OctiServerLinkHostVM @Inject constructor(
         deviceMonitorJob = vmScope.launch {
             connectorFlow
                 .flatMapLatest { it.state }
-                .map { it.devices }
+                .map { it.deviceMetadata }
                 .withPrevious()
                 .map { (old, new) ->
                     if (old == null) return@map null
