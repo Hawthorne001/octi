@@ -184,6 +184,7 @@ class DashboardVM @Inject constructor(
         val isCurrentDevice: Boolean,
         val infos: List<ConnectorIssue> = emptyList(),
         val isDegraded: Boolean = false,
+        val degradedConnectorId: ConnectorId? = null,
         val degradedLabel: String? = null,
         val degradedPlatform: String? = null,
         val degradedVersion: String? = null,
@@ -335,6 +336,16 @@ class DashboardVM @Inject constructor(
     fun goToSyncServices() = launch {
         log(TAG) { "goToSyncServices()" }
         navTo(Nav.Sync.List)
+    }
+
+    fun goToConnectorDevices(connectorId: ConnectorId) = launch {
+        log(TAG) { "goToConnectorDevices($connectorId)" }
+        navTo(Nav.Sync.Devices(connectorId = connectorId.idString))
+    }
+
+    fun goToDeviceDetails(connectorId: ConnectorId, deviceId: DeviceId) = launch {
+        log(TAG) { "goToDeviceDetails($connectorId, $deviceId)" }
+        navTo(Nav.Sync.Devices(connectorId = connectorId.idString, deviceId = deviceId.id))
     }
 
     fun goToUpgrade() {
@@ -560,7 +571,7 @@ class DashboardVM @Inject constructor(
                 .filter { meta ->
                     meta.deviceId !in normalDeviceIds
                             && meta.deviceId != syncSettings.deviceId
-                            && meta.addedAt?.let { Duration.between(it, Instant.now()).toMinutes() >= 2 } != false
+                            && meta.addedAt?.let { Duration.between(it, Instant.now()) >= SyncSettings.FIRST_SYNC_GRACE_PERIOD } != false
                 }
                 .map { meta ->
                     DeviceItem(
@@ -572,6 +583,7 @@ class DashboardVM @Inject constructor(
                         isLimited = false,
                         isCurrentDevice = false,
                         isDegraded = true,
+                        degradedConnectorId = connector.identifier,
                         degradedLabel = meta.label,
                         degradedPlatform = meta.platform,
                         degradedVersion = meta.version,

@@ -16,7 +16,7 @@ sealed interface OctiServerIssue : ConnectorIssue {
         val deviceLabel: String?,
     ) : OctiServerIssue {
         override val severity: IssueSeverity = IssueSeverity.ERROR
-        override val label: CaString = caString { it.getString(R.string.sync_octiserver_device_encryption_incompatible) }
-        override val countLabel: CaString = caString { it.getString(R.string.sync_octiserver_issues_type_encryption_error) }
+        override val label: CaString = caString { it.getString(R.string.sync_octiserver_issues_type_encryption_error) }
+        override val description: CaString = caString { it.getString(R.string.sync_octiserver_device_encryption_incompatible) }
     }
 }

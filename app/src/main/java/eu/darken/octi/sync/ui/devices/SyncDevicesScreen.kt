@@ -28,7 +28,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +54,7 @@ import java.time.Instant
 @Composable
 fun SyncDevicesScreenHost(
     connectorId: String,
+    initialDeviceId: String? = null,
     vm: SyncDevicesVM = hiltViewModel(),
 ) {
     vm.initialize(connectorId)
@@ -63,6 +66,7 @@ fun SyncDevicesScreenHost(
     state?.let {
         SyncDevicesScreen(
             state = it,
+            initialDeviceId = initialDeviceId,
             onNavigateUp = { vm.navUp() },
             onDeleteDevice = { deviceId -> vm.deleteDevice(deviceId) },
         )
@@ -72,10 +76,20 @@ fun SyncDevicesScreenHost(
 @Composable
 fun SyncDevicesScreen(
     state: SyncDevicesVM.State,
+    initialDeviceId: String? = null,
     onNavigateUp: () -> Unit,
     onDeleteDevice: (DeviceId) -> Unit,
 ) {
     var selectedDevice by remember { mutableStateOf<SyncDevicesVM.DeviceItem?>(null) }
+    var initialConsumed by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(initialDeviceId, state.items) {
+        if (!initialConsumed && initialDeviceId != null && state.items.isNotEmpty()) {
+            initialConsumed = true
+            val target = state.items.find { it.deviceId.id == initialDeviceId }
+            if (target != null) selectedDevice = target
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -187,7 +201,7 @@ private fun DeviceRow(
         item.error?.let { error ->
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = error.toString(),
+                text = error.localizedMessage ?: stringResource(eu.darken.octi.common.R.string.general_error_label),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 maxLines = 10,

@@ -13,11 +13,11 @@ sealed interface CommonIssue : ConnectorIssue {
         val lastSeen: Instant,
     ) : CommonIssue {
         override val severity: IssueSeverity = IssueSeverity.WARNING
-        override val label: CaString = caString {
+        override val label: CaString = caString { it.getString(R.string.sync_issues_type_stale_device) }
+        override val description: CaString = caString {
             val period = StalenessUtil.formatStalePeriod(it, lastSeen)
             it.getString(R.string.sync_device_stale_warning_text, period)
         }
-        override val countLabel: CaString = caString { it.getString(R.string.sync_issues_type_stale_device) }
     }
 
     data class OutdatedVersion(
@@ -26,8 +26,8 @@ sealed interface CommonIssue : ConnectorIssue {
         val version: String,
     ) : CommonIssue {
         override val severity: IssueSeverity = IssueSeverity.WARNING
-        override val label: CaString = caString { it.getString(R.string.sync_device_outdated_version_warning, version) }
-        override val countLabel: CaString = caString { it.getString(R.string.sync_issues_type_outdated_version) }
+        override val label: CaString = caString { it.getString(R.string.sync_issues_type_outdated_version) }
+        override val description: CaString = caString { it.getString(R.string.sync_device_outdated_version_warning, version) }
     }
 
     data class ClockSkew(
@@ -35,7 +35,7 @@ sealed interface CommonIssue : ConnectorIssue {
         override val deviceId: DeviceId,
     ) : CommonIssue {
         override val severity: IssueSeverity = IssueSeverity.WARNING
-        override val label: CaString = caString { it.getString(R.string.sync_device_clock_skew_warning_text) }
-        override val countLabel: CaString = caString { it.getString(R.string.sync_issues_type_clock_skew) }
+        override val label: CaString = caString { it.getString(R.string.sync_issues_type_clock_skew) }
+        override val description: CaString = caString { it.getString(R.string.sync_device_clock_skew_warning_text) }
     }
 }

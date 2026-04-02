@@ -9,5 +9,5 @@ interface ConnectorIssue {
     val deviceId: DeviceId
     val severity: IssueSeverity
     val label: CaString
-    val countLabel: CaString
+    val description: CaString
 }

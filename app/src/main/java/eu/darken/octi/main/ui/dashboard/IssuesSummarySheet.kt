@@ -78,7 +78,7 @@ fun IssuesSummarySheet(
                             style = MaterialTheme.typography.titleSmall,
                         )
                         val summary = connectorIssues
-                            .groupBy { it.countLabel.get(context) }
+                            .groupBy { it.label.get(context) }
                             .map { (typeLabel, group) -> "${group.size} $typeLabel" }
                             .joinToString(", ")
                         Text(

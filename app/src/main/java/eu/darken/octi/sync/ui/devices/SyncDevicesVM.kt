@@ -47,7 +47,8 @@ class SyncDevicesVM @Inject constructor(
         .filterNotNull()
         .flatMapLatest { idStr ->
             manager.connectors.map { connectors ->
-                connectors.single { it.identifier.idString == idStr }
+                connectors.singleOrNull { it.identifier.idString == idStr }
+                    ?: throw NoSuchElementException("No connector for $idStr")
             }
         }
         .catch { if (it is NoSuchElementException) navUp() else throw it }

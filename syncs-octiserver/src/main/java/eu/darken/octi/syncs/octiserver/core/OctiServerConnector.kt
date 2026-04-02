@@ -285,7 +285,7 @@ class OctiServerConnector @AssistedInject constructor(
         val currentState = _state.value()
         val metadata = currentState.deviceMetadata
         val data = _data.value
-        val dataDeviceIds = data?.devices?.map { it.deviceId }?.toSet() ?: emptySet()
+        val dataDeviceIds = data?.devices?.filter { it.modules.isNotEmpty() }?.map { it.deviceId }?.toSet() ?: emptySet()
         val encType = credentials.encryptionKeyset.type
         val isGcmSiv = EncryptionMode.fromTypeString(encType) == EncryptionMode.AES256_GCM_SIV
 
@@ -293,7 +293,7 @@ class OctiServerConnector @AssistedInject constructor(
             if (device.deviceId == syncSettings.deviceId) return@mapNotNull null
             if (device.deviceId in dataDeviceIds) return@mapNotNull null
             val addedAt = device.addedAt ?: return@mapNotNull null
-            if (Duration.between(addedAt, Instant.now()).toMinutes() < 2) return@mapNotNull null
+            if (Duration.between(addedAt, Instant.now()) < SyncSettings.FIRST_SYNC_GRACE_PERIOD) return@mapNotNull null
             OctiServerIssue.EncryptionIncompatible(
                 connectorId = identifier,
                 deviceId = device.deviceId,

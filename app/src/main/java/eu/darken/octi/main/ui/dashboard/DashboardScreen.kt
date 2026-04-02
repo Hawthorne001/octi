@@ -128,6 +128,7 @@ import eu.darken.octi.modules.power.core.PowerInfo.Status
 import eu.darken.octi.modules.power.ui.dashboard.PowerDetailSheet
 import eu.darken.octi.modules.wifi.WifiModule
 import eu.darken.octi.modules.wifi.ui.dashboard.WifiDetailSheet
+import eu.darken.octi.sync.core.ConnectorId
 import eu.darken.octi.sync.core.ConnectorIssue
 import eu.darken.octi.sync.core.DeviceId
 import eu.darken.octi.sync.core.IssueSeverity
@@ -248,6 +249,15 @@ fun DashboardScreenHost(vm: DashboardVM = hiltViewModel()) {
             state = it,
             onRefresh = { vm.refresh() },
             onSyncServices = { vm.goToSyncServices() },
+            onDegradedClick = { device ->
+                val connectorId = device.degradedConnectorId
+                if (connectorId != null) {
+                    vm.goToDeviceDetails(connectorId, device.deviceId)
+                } else {
+                    vm.goToSyncServices()
+                }
+            },
+            onConnectorDevices = { vm.goToConnectorDevices(it) },
             onUpgrade = { vm.goToUpgrade() },
             onSettings = { vm.goToSettings() },
             onDismissSyncSetup = { vm.dismissSyncSetup() },
@@ -281,6 +291,8 @@ fun DashboardScreen(
     state: DashboardVM.State,
     onRefresh: () -> Unit,
     onSyncServices: () -> Unit,
+    onDegradedClick: (DashboardVM.DeviceItem) -> Unit,
+    onConnectorDevices: (ConnectorId) -> Unit,
     onUpgrade: () -> Unit,
     onSettings: () -> Unit,
     onDismissSyncSetup: () -> Unit,
@@ -456,7 +468,7 @@ fun DashboardScreen(
                     onEditCard = { editingDeviceId = it },
                     onUpgrade = onUpgrade,
                     onManageStaleDevice = onSyncServices,
-                    onIssueClick = onSyncServices,
+                    onDegradedClick = onDegradedClick,
                     onPowerClicked = { showPowerDetail = it },
                     onPowerAlerts = onPowerAlerts,
                     onWifiClicked = { showWifiDetail = it },
@@ -506,7 +518,7 @@ fun DashboardScreen(
                         onEditCard = { editingDeviceId = it },
                         onUpgrade = onUpgrade,
                         onManageStaleDevice = onSyncServices,
-                        onIssueClick = onSyncServices,
+                        onDegradedClick = onDegradedClick,
                         onPowerClicked = { showPowerDetail = it },
                         onPowerAlerts = onPowerAlerts,
                         onWifiClicked = { showWifiDetail = it },
@@ -578,7 +590,10 @@ fun DashboardScreen(
                 severity = severity,
                 issues = filteredIssues,
                 connectorLabels = connectorLabels,
-                onConnectorClick = { onSyncServices() },
+                onConnectorClick = { connectorId ->
+                    showIssuesSheetSeverity = null
+                    onConnectorDevices(connectorId)
+                },
                 onDismiss = { showIssuesSheetSeverity = null },
             )
         } else {
@@ -1354,7 +1369,7 @@ private fun DashboardDeviceCard(
     onEditCard: (String) -> Unit,
     onUpgrade: () -> Unit,
     onManageStaleDevice: () -> Unit,
-    onIssueClick: () -> Unit,
+    onDegradedClick: (DashboardVM.DeviceItem) -> Unit,
     onPowerClicked: (DashboardVM.ModuleItem.Power) -> Unit,
     onPowerAlerts: (DeviceId) -> Unit,
     onWifiClicked: (DashboardVM.ModuleItem.Wifi) -> Unit,
@@ -1404,7 +1419,7 @@ private fun DashboardDeviceCard(
                     .combinedClickable(
                         onClick = {
                             when {
-                                isDegraded -> onIssueClick()
+                                isDegraded -> onDegradedClick(device)
                                 canEdit -> onToggleCollapse(device.deviceId.id)
                                 device.isLimited -> onUpgrade()
                             }
@@ -1519,7 +1534,7 @@ private fun DashboardDeviceCard(
                 HorizontalDivider()
                 IssueInfoRow(
                     issue = issue,
-                    onClick = onIssueClick,
+                    onClick = { onDegradedClick(device) },
                 )
             }
         }
@@ -1560,7 +1575,7 @@ private fun DeviceCardOrEditor(
     onEditCard: (String) -> Unit,
     onUpgrade: () -> Unit,
     onManageStaleDevice: () -> Unit,
-    onIssueClick: () -> Unit,
+    onDegradedClick: (DashboardVM.DeviceItem) -> Unit,
     onPowerClicked: (DashboardVM.ModuleItem.Power) -> Unit,
     onPowerAlerts: (DeviceId) -> Unit,
     onWifiClicked: (DashboardVM.ModuleItem.Wifi) -> Unit,
@@ -1601,7 +1616,7 @@ private fun DeviceCardOrEditor(
             onEditCard = onEditCard,
             onUpgrade = onUpgrade,
             onManageStaleDevice = onManageStaleDevice,
-            onIssueClick = onIssueClick,
+            onDegradedClick = onDegradedClick,
             onPowerClicked = onPowerClicked,
             onPowerAlerts = onPowerAlerts,
             onWifiClicked = onWifiClicked,
@@ -1713,6 +1728,8 @@ private fun DashboardScreenEmptyPreview() = PreviewWrapper {
         ),
         onRefresh = {},
         onSyncServices = {},
+        onDegradedClick = {},
+        onConnectorDevices = {},
         onUpgrade = {},
         onSettings = {},
         onDismissSyncSetup = {},
@@ -1813,6 +1830,8 @@ private fun DashboardScreenPreview() = PreviewWrapper {
         ),
         onRefresh = {},
         onSyncServices = {},
+        onDegradedClick = {},
+        onConnectorDevices = {},
         onUpgrade = {},
         onSettings = {},
         onDismissSyncSetup = {},
@@ -1912,6 +1931,8 @@ private fun DashboardScreenMultiDevicePreview() = PreviewWrapper {
         ),
         onRefresh = {},
         onSyncServices = {},
+        onDegradedClick = {},
+        onConnectorDevices = {},
         onUpgrade = {},
         onSettings = {},
         onDismissSyncSetup = {},

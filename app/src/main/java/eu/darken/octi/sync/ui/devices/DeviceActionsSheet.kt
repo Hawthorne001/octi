@@ -22,6 +22,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -34,6 +35,7 @@ import eu.darken.octi.common.compose.Preview2
 import eu.darken.octi.common.compose.PreviewWrapper
 import eu.darken.octi.modules.meta.core.MetaInfo
 import eu.darken.octi.sync.core.ConnectorType
+import eu.darken.octi.sync.core.IssueSeverity
 import eu.darken.octi.sync.core.DeviceId
 import java.time.Instant
 import java.time.ZoneId
@@ -128,6 +130,21 @@ fun DeviceActionsSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            if (device.issues.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                device.issues.forEach { issue ->
+                    val tint = when (issue.severity) {
+                        IssueSeverity.ERROR -> MaterialTheme.colorScheme.error
+                        IssueSeverity.WARNING -> MaterialTheme.colorScheme.tertiary
+                    }
+                    Text(
+                        text = issue.description.get(LocalContext.current),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tint,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -14,7 +14,7 @@ import javax.inject.Inject
 class SyncDevicesNavigation @Inject constructor() : NavigationEntry {
     override fun EntryProviderScope<NavKey>.setup() {
         entry<Nav.Sync.Devices> { key ->
-            SyncDevicesScreenHost(connectorId = key.connectorId)
+            SyncDevicesScreenHost(connectorId = key.connectorId, initialDeviceId = key.deviceId)
         }
     }
 
