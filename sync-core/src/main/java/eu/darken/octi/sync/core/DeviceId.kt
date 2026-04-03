@@ -8,4 +8,8 @@ import java.util.*
 
 @Serializable
 @Parcelize
-data class DeviceId(@SerialName("id") val id: String = UUID.randomUUID().toString()) : Parcelable
+data class DeviceId(@SerialName("id") val id: String = UUID.randomUUID().toString()) : Parcelable {
+
+    val logLabel: String
+        get() = id.take(8)
+}

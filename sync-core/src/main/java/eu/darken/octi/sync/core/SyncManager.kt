@@ -119,7 +119,7 @@ class SyncManager @Inject constructor(
         .shareLatest(scope + dispatcherProvider.Default)
 
     suspend fun sync(options: SyncOptions = SyncOptions()) {
-        log(TAG) { "sync(options=$options)" }
+        log(TAG) { "sync(${options.logLabel})" }
         if (!syncLock.tryLock()) {
             log(TAG) { "Sync already in progress, re-queuing" }
             requestSync()
@@ -150,7 +150,7 @@ class SyncManager @Inject constructor(
     }
 
     suspend fun sync(connectorId: ConnectorId, options: SyncOptions = SyncOptions()) {
-        log(TAG) { "sync(id=$connectorId, options=$options)" }
+        log(TAG) { "sync(${connectorId.logLabel}, ${options.logLabel})" }
         val connector = connectors.first().singleOrNull { it.identifier == connectorId }
         if (connector == null) {
             log(TAG, WARN) { "sync(): Connector $connectorId not found, skipping" }

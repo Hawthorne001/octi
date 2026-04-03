@@ -16,4 +16,6 @@ data class ConnectorId(
     val idString: String
         get() = "${type.typeId}-$subtype-$account"
 
+    val logLabel: String
+        get() = "$type:$subtype"
 }

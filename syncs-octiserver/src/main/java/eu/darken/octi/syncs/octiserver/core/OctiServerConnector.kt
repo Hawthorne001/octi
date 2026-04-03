@@ -174,7 +174,7 @@ class OctiServerConnector @AssistedInject constructor(
     }
 
     override suspend fun sync(options: SyncOptions) {
-        log(TAG) { "sync(options=$options)" }
+        log(TAG) { "sync(${options.logLabel})" }
 
         if (!isInternetAvailable()) {
             log(TAG, WARN) { "sync(): Skipping, we are offline." }
@@ -225,7 +225,7 @@ class OctiServerConnector @AssistedInject constructor(
             val moduleFilter = options.moduleFilter
             val deviceFilter = options.deviceFilter
             val isTargeted = moduleFilter != null || deviceFilter != null
-            log(TAG) { "read(moduleFilter=$moduleFilter, deviceFilter=$deviceFilter)" }
+            log(TAG) { "read(modules=${moduleFilter?.size}, devices=${deviceFilter?.size})" }
             try {
                 runServerAction("read-server") {
                     val newData = readServer(moduleFilter, deviceFilter)
@@ -277,11 +277,11 @@ class OctiServerConnector @AssistedInject constructor(
         if (readData.serverTime != null) {
             val serverTime = readData.serverTime
             val offset = Duration.between(serverTime, readData.localTime)
-            log(TAG, VERBOSE) { "fetchModule($deviceId:$moduleId): serverTime=$serverTime, offset=${offset.seconds}s" }
+            log(TAG, VERBOSE) { "fetchModule(${deviceId.logLabel}:${moduleId.logLabel}): serverTime=$serverTime, offset=${offset.seconds}s" }
             val clockOffset = SyncConnectorState.ClockOffset(offset = offset, measuredAt = readData.localTime)
             _state.updateBlocking { copy(clockOffsets = clockOffsets + clockOffset) }
         } else {
-            log(TAG, VERBOSE) { "fetchModule($deviceId:$moduleId): no serverTime in response" }
+            log(TAG, VERBOSE) { "fetchModule(${deviceId.logLabel}:${moduleId.logLabel}): no serverTime in response" }
         }
 
         val payload = if (readData.payload != ByteString.EMPTY) {
@@ -303,7 +303,8 @@ class OctiServerConnector @AssistedInject constructor(
         moduleFilter: Set<ModuleId>? = null,
         deviceFilter: Set<DeviceId>? = null,
     ): OctiServerData {
-        log(TAG, DEBUG) { "readServer(moduleFilter=$moduleFilter, deviceFilter=$deviceFilter): Starting..." }
+        val start = System.currentTimeMillis()
+        log(TAG, DEBUG) { "readServer(modules=${moduleFilter?.size}, devices=${deviceFilter?.size}): Starting..." }
         _state.updateBlocking { copy(clockOffsets = emptyList()) }
         val allLinkedDevices = endpoint.listDevices()
         val allDeviceIds = allLinkedDevices.map { it.deviceId }
@@ -340,14 +341,16 @@ class OctiServerConnector @AssistedInject constructor(
             }
         }.awaitAll()
 
-        return OctiServerData(
+        val result = OctiServerData(
             connectorId = identifier,
             devices = devices
         )
+        log(TAG) { "readServer() took ${System.currentTimeMillis() - start}ms (${devices.size} devices)" }
+        return result
     }
 
     private suspend fun writeServer(data: SyncWrite) {
-        log(TAG, DEBUG) { "writeServer(): $data)" }
+        log(TAG, DEBUG) { "writeServer(): ${data.modules.size} modules" }
 
         // TODO cache write data for when we are online again?
         if (!isInternetAvailable()) {

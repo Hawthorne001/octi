@@ -7,4 +7,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 @Parcelize
-data class ModuleId(@SerialName("id") val id: String) : Parcelable
+data class ModuleId(@SerialName("id") val id: String) : Parcelable {
+
+    val logLabel: String
+        get() = id.removePrefix("eu.darken.octi.module.core.")
+}

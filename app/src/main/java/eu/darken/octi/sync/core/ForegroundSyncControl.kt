@@ -6,6 +6,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import eu.darken.octi.common.coroutine.AppScope
 import eu.darken.octi.common.debug.logging.Logging.Priority.ERROR
 import eu.darken.octi.common.debug.logging.Logging.Priority.INFO
+import eu.darken.octi.common.debug.logging.Logging.Priority.VERBOSE
 import eu.darken.octi.common.debug.logging.Logging.Priority.WARN
 import eu.darken.octi.common.debug.logging.asLog
 import eu.darken.octi.common.debug.logging.log
@@ -142,12 +143,12 @@ class ForegroundSyncControl @Inject constructor(
                     when (event) {
                         is SyncEvent.ModuleChanged -> when (event.action) {
                             SyncEvent.ModuleChanged.Action.UPDATED -> {
-                                log(TAG) { "Queued: ${event.moduleId} on ${event.connectorId}" }
+                                log(TAG, VERBOSE) { "Queued: ${event.moduleId.logLabel} on ${event.connectorId.logLabel}" }
                                 eventChannel.send(event)
                             }
 
                             SyncEvent.ModuleChanged.Action.DELETED -> {
-                                log(TAG, INFO) { "Module deleted: ${event.moduleId}" }
+                                log(TAG, INFO) { "Module deleted: ${event.moduleId.logLabel}" }
                             }
                         }
 
@@ -216,7 +217,7 @@ class ForegroundSyncControl @Inject constructor(
 
     private suspend fun syncPendingModules(pending: Map<ConnectorId, PendingSync>) {
         pending.forEach { (connectorId, sync) ->
-            log(TAG) { "Batched sync: ${sync.modules.size} modules, ${sync.devices.size} devices on $connectorId" }
+            log(TAG) { "Batched sync: ${sync.modules.size} modules, ${sync.devices.size} devices on ${connectorId.logLabel}" }
             try {
                 syncManager.sync(
                     connectorId,

@@ -4,6 +4,7 @@ import eu.darken.octi.common.coroutine.AppScope
 import eu.darken.octi.common.coroutine.DispatcherProvider
 import eu.darken.octi.common.debug.Bugs
 import eu.darken.octi.common.debug.logging.Logging.Priority.ERROR
+import eu.darken.octi.common.debug.logging.Logging.Priority.VERBOSE
 import eu.darken.octi.common.debug.logging.Logging.Priority.WARN
 import eu.darken.octi.common.debug.logging.asLog
 import eu.darken.octi.common.debug.logging.log
@@ -63,7 +64,8 @@ abstract class BaseModuleRepo<T : Any>(
     private val refreshTrigger = MutableStateFlow(UUID.randomUUID())
 
     override suspend fun updateSelf(self: ModuleData<T>?) {
-        log(tag) { "updateSelf(self=$self)" }
+        log(tag) { "updateSelf(modifiedAt=${self?.modifiedAt})" }
+        log(tag, VERBOSE) { "updateSelf(self=$self)" }
         _state.updateBlocking {
             moduleCache.set(moduleSync.ourDeviceId, self)
             copy(self = self)
@@ -71,7 +73,8 @@ abstract class BaseModuleRepo<T : Any>(
     }
 
     override suspend fun updateOthers(newOthers: Collection<ModuleData<T>>) {
-        log(tag) { "updateOthers(newOthers=$newOthers)" }
+        log(tag) { "updateOthers(${newOthers.size} devices)" }
+        log(tag, VERBOSE) { "updateOthers: $newOthers" }
         _state.updateBlocking {
             // Delete all except ourself, then set with new known data, to remove stale data
             (moduleCache.cachedDevices() - moduleSync.ourDeviceId).forEach { moduleCache.set(it, null) }

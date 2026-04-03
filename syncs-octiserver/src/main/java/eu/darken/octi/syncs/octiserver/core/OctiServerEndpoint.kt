@@ -6,6 +6,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import eu.darken.octi.common.collections.toByteString
 import eu.darken.octi.common.coroutine.DispatcherProvider
+import eu.darken.octi.common.debug.logging.Logging.Priority.VERBOSE
 import eu.darken.octi.common.debug.logging.log
 import eu.darken.octi.common.debug.logging.logTag
 import eu.darken.octi.common.serialization.RetrofitJson
@@ -175,7 +176,7 @@ class OctiServerEndpoint @AssistedInject constructor(
     )
 
     suspend fun readModule(deviceId: DeviceId, moduleId: ModuleId): ReadData? = withContext(dispatcherProvider.IO) {
-        log(TAG) { "readModule(deviceId=$deviceId, moduleId=$moduleId)" }
+        log(TAG, VERBOSE) { "readModule(deviceId=${deviceId.logLabel}, moduleId=${moduleId.logLabel})" }
         val response = try {
             api.readModule(
                 callerDeviceId = ourDeviceIdString,

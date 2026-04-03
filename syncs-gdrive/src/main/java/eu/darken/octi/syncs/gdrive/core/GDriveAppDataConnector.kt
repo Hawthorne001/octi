@@ -512,7 +512,7 @@ class GDriveAppDataConnector @AssistedInject constructor(
     private var isSyncing = false
 
     override suspend fun sync(options: SyncOptions) {
-        log(TAG) { "sync(options=$options)" }
+        log(TAG) { "sync(${options.logLabel})" }
         val start = System.currentTimeMillis()
 
         if (!isInternetAvailable()) {
