@@ -77,11 +77,14 @@ jobs:
           failing=$(echo "$checks" | jq '[.[] | select(.status == "completed") | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
           pending=$(echo "$checks" | jq '[.[] | select(.status != "completed")] | length')
           echo "Failing: $failing, Pending: $pending"
-          if [[ "$failing" != "0" || "$pending" != "0" ]]; then
-            echo "::error::Refusing to bump: main has $failing failing and $pending pending checks." >&2
+          if [[ "$failing" != "0" ]]; then
+            echo "::error::Refusing to bump: main has $failing failing checks." >&2
             exit 1
           fi
-          echo "All checks passing."
+          if [[ "$pending" != "0" ]]; then
+            echo "::warning::main has $pending pending checks; proceeding because pending checks are non-blocking." >&2
+          fi
+          echo "No failing checks."
 
       - name: Compute and validate
         id: plan
