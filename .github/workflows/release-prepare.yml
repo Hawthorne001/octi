@@ -70,8 +70,9 @@ jobs:
           set -euo pipefail
           sha=$(git rev-parse HEAD)
           echo "Checking check-runs for ${sha}"
+          # Check-run names are job names, not workflow names.
           checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" \
-            --jq '[.check_runs[] | select(.name != "Release prepare") | {name, status, conclusion}]')
+            --jq '[.check_runs[] | select(.name != "Compute and validate" and .name != "Push and dispatch") | {name, status, conclusion}]')
           echo "$checks"
           failing=$(echo "$checks" | jq '[.[] | select(.status == "completed") | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")] | length')
           pending=$(echo "$checks" | jq '[.[] | select(.status != "completed")] | length')
